@@ -8,7 +8,7 @@ scp -i ${var.name_prefix}-key-${random_string.suffix.result}.pem ${var.name_pref
 ssh -i ${var.name_prefix}-key-${random_string.suffix.result}.pem ubuntu@${module.bastion.public_ip}
 
 3) SSH to the AC
-ssh -i ${var.name_prefix}-key-${random_string.suffix.result}.pem zsroot@${module.ac_vm.ac_private_ip[0]} -o "proxycommand ssh -W %h:%p -i ${var.name_prefix}-key-${random_string.suffix.result}.pem ubuntu@${module.bastion.public_ip}"
+ssh -i ${var.name_prefix}-key-${random_string.suffix.result}.pem admin@${module.ac_vm.ac_private_ip[0]} -o "proxycommand ssh -W %h:%p -i ${var.name_prefix}-key-${random_string.suffix.result}.pem ubuntu@${module.bastion.public_ip}"
 
 All App Connector Instance IPs:
 ${join("\n", module.ac_vm.ac_private_ip)}

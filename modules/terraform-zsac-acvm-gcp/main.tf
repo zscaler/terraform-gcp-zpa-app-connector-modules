@@ -26,7 +26,7 @@ resource "google_compute_instance_template" "ac_instance_template" {
   }
 
   metadata = {
-    ssh-keys                = "zsroot:${var.ssh_key}"
+    ssh-keys                = "admin:${var.ssh_key}"
     enable-guest-attributes = "TRUE"
   }
 
@@ -72,9 +72,9 @@ resource "google_compute_instance_group_manager" "ac_instance_group_manager" {
 ################################################################################
 # Wait for Instance Group creation to collect individual compute details
 ################################################################################
-resource "time_sleep" "wait_30_seconds" {
+resource "time_sleep" "wait_60_seconds" {
   depends_on      = [google_compute_instance_group_manager.ac_instance_group_manager]
-  create_duration = "30s"
+  create_duration = "60s"
 }
 
 data "google_compute_instance_group" "ac_instance_groups" {
@@ -82,7 +82,7 @@ data "google_compute_instance_group" "ac_instance_groups" {
   self_link = element(google_compute_instance_group_manager.ac_instance_group_manager[*].instance_group, count.index)
 
   depends_on = [
-    time_sleep.wait_30_seconds
+    time_sleep.wait_60_seconds
   ]
 }
 
