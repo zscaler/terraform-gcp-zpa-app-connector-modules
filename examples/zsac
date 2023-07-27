@@ -1,0 +1,497 @@
+#!/usr/bin/env bash
+
+set -eo pipefail
+
+usage()
+{
+    echo "Usage: $0 <up|destroy>"
+    exit 1
+}
+
+if [ $# -ne 1 ] ; then
+    usage
+else
+    case $1 in
+      up|destroy|do)
+          oper=$1
+      ;;
+      *)
+          usage
+      ;;
+    esac
+fi
+
+if [[ "$oper" == "up" ]]; then
+    # shellcheck disable=SC2153
+    if [ -z "$dtype" ]; then
+    while true; do
+     read -r -p "Deployment: ( greenfield | brownfield ): " deploy
+
+    case $deploy in
+      greenfield)
+          break
+      ;;
+      brownfield)
+          break
+      ;;    
+      *)
+          echo "Invalid Deployment Type: ${dtype}"
+      ;;
+    esac
+  done
+
+    while [ "$deploy" == "greenfield" ]; do
+     read -r -p "Deployment Type: ( base_ac ): " dtype
+
+    case $dtype in
+      base_ac)
+          echo "Deployment Type: ${dtype}"
+          break
+      ;;
+      *)
+          echo "Invalid Deployment Type: ${dtype}"
+      ;;
+    esac
+  done
+
+  while [ "$deploy" == "brownfield" ]; do
+     read -r -p "Deployment Type: ( ac ) : " dtype
+
+    case $dtype in
+      ac)
+          echo "Deployment Type: ${dtype}"
+          break
+      ;;
+      *)
+          echo "Invalid Deployment Type: ${dtype}"
+      ;;
+    esac
+  done
+    else
+      dtype=$dtype
+    fi
+fi
+
+echo "Discovering processor architecture..."
+archdetect=$(uname -m)
+
+tversion=1.1.9
+echo "Detecting OS..."
+if [[ "$OSTYPE" == "linux"* ]]; then
+    os_str=linux
+    arch=amd64
+    ostype=Linux
+elif [[ "$OSTYPE" == "darwin"* && $archdetect == "arm64" ]]; then
+    os_str=darwin
+    arch=arm64
+    ostype=MacOS_arm64
+elif [[ "$OSTYPE" == "darwin"* ]]; then
+    os_str=darwin
+    arch=amd64
+    ostype=MacOS
+elif [[ "$OSTYPE" == "freebsd"* ]]; then
+    os_str=freebsd
+    arch=amd64
+    ostype=FreeBSD
+    echo "FreeBSD support coming soon..."
+    exit 1
+else
+    echo "Unsupported OS: $OSTYPE"
+    exit 1
+fi
+echo "OS is $ostype"
+
+dir=bin
+echo "Creating a local $dir directory if not present..."
+if [[ ! -e $dir ]]; then
+    mkdir $dir
+elif [[ ! -d $dir ]]; then
+    echo "$dir already exists but is not a directory" 1>&2
+    exit 1
+fi
+
+gcp_regions=[\
+"asia-east1","asia-east2","asia-northeast1","asia-northeast2","asia-northeast3",\
+"asia-south1","asia-south2","asia-southeast1","asia-southeast2","australia-southeast1",\
+"australia-southeast2","europe-central2","europe-north1","europe-southwest1","europe-west1",\
+"europe-west2","europe-west3","europe-west4","europe-west6","europe-west8",\
+"europe-west9","europe-west12","me-central1","me-west1","northamerica-northeast1",\
+"northamerica-northeast2","southamerica-east1","southamerica-west1","us-central1","us-east1",\
+"us-east4","us-east5","us-south1","us-west1","us-west2",\
+"us-west3","us-west4"\
+]
+
+echo "Checking GCP Environment Variables and App Connector bootstrap requirements ..."
+# if .zsacrc is not present we'll assume that GCO env was never set
+gcp_location_default="us-central1"
+project_id_default="ac-poc-host-project-01"
+
+if [[ ! -e ./.zsacrc ]]; then
+    read -r -p "Enter Google Cloud Host Project Credential File Path: " gcp_credentials
+    if [ -z "$gcp_credentials" ];then
+      echo "Invalid Google Cloud Host Project credentials entered."
+      echo "Delete .zsacrc file and re-run zsec up..."
+      exit 1
+    fi
+    echo "export TF_VAR_credentials=${gcp_credentials}" >> .zsacrc
+
+    read -r -p "Enter Google Cloud Host Project ID[Default=$project_id_default]: " project_id
+    project_id=${project_id:-$project_id_default}
+    echo "export TF_VAR_project=${project_id}" >> .zsacrc
+
+    read -r -p "Enter Google Cloud Region [Default=$gcp_location_default]: " gcp_location
+    gcp_location=${gcp_location:-$gcp_location_default}
+    if [[ ${gcp_regions[*]} =~ $gcp_location ]]; then
+    echo "export TF_VAR_region=${gcp_location}" >> .zsacrc
+    else
+    echo "Invalid Google Cloud region name entered."
+    echo "Delete .zsacrc file and re-run zsec up..."
+    exit 1
+    fi
+
+    zpa_cloud_default=PRODUCTION
+    while true; do
+        read -r -p "Enter ZPA Cloud Name (PRODUCTION, BETA, GOV, or PREVIEW) [Default=$zpa_cloud_default]: " zpa_cloud_input
+        zpa_cloud=${zpa_cloud_input:-$zpa_cloud_default}
+        case $zpa_cloud in
+        PROD*|prod*|PRODUCTION|production)
+          echo "ZPA Cloud selected: PRODUCTION"
+          echo "export ZPA_CLOUD=\"PRODUCTION\"" >> .zsacrc
+          break
+          ;;
+        BETA|beta|b|B)
+          echo "ZPA Cloud selected: BETA"
+          echo "export ZPA_CLOUD=\"BETA\"" >> .zsacrc
+          break
+          ;;
+        GOV|gov|g|G)
+          echo "ZPA Cloud selected: GOV"
+          echo "export ZPA_CLOUD=\"GOV\"" >> .zsacrc
+          break
+          ;;
+        PREVIEW|preview|pre*|PRE*)
+          echo "ZPA Cloud selected: PREVIEW"
+          echo "export ZPA_CLOUD=\"PREVIEW\"" >> .zsacrc
+          break
+          ;;
+          *)
+          echo "Invalid Cloud. Supported values are PRODUCTION, BETA, GOV, or PREVIEW: ${zpa_cloud}."
+      ;;
+        esac
+    done
+    read -r -p "Enter ZPA Client ID: " zpa_client_id
+    echo "export ZPA_CLIENT_ID='$zpa_client_id'" >> .zsacrc
+    read -r -p "Enter ZPA Client Secret: " zpa_client_secret
+    echo "export ZPA_CLIENT_SECRET='$zpa_client_secret'" >> .zsacrc
+    read -r -p "Enter ZPA Customer ID: " zpa_customer_id
+    echo "export ZPA_CUSTOMER_ID='$zpa_customer_id'" >> .zsacrc
+
+    while true; do
+        read -r -p "Do you already have an App Connector provisioning key to use? [yes/no] " prov_key_response
+        case $prov_key_response in 
+	    yes|y ) 
+        read -r -p "Enter the name of your existing App Connector provisioning key: " byo_provisioning_key_name
+        echo "export TF_VAR_byo_provisioning_key=true" >> .zsacrc
+        echo "export TF_VAR_byo_provisioning_key_name='$byo_provisioning_key_name'" >> .zsacrc
+        break
+        ;;
+	    no|n )
+        echo "Terraform will be creating a new App Connector Group and provisioning key"
+        echo "Before proceeding, make sure you have entered all variable requirements from steps 1 and 2 in $dtype/terraform.tfvars"
+        break
+        ;;
+	    * ) echo "invalid response. Please enter yes or no";;
+        esac
+    done
+
+
+    while [[ "$dtype" == "base"* && "$oper" == "up" ]]; do
+    clientpublicip=$(curl -s ifconfig.me)
+    echo "greenfield deployments include a publicly accessible ssh bastion host.."
+    read -r -p "Your current public IP is ${clientpublicip}. Lock SSH access to this IP? [yes/no] " bastion_response
+case $bastion_response in
+	yes|y )
+    echo "Updating Bastion NSG to permit SSH only from ${clientpublicip}: "
+    echo "export 'TF_VAR_bastion_ssh_allow_ip=[\"${clientpublicip}/32\"]'" >> .zsacrc
+    useclientip=true
+    break
+    ;;
+	no|n )
+    useclientip=false
+    break
+    ;;
+	* ) echo "invalid response. Please enter yes or no";;
+    esac
+done
+
+if [[ "$useclientip" == "false" ]]; then
+while true; do
+read -r -p "Lock SSH access to a different IP address or range? \"no\" is open(0.0.0.0/0) [yes/no]: " changebastionip
+case $changebastionip in
+	yes|y )
+    read -r -p "Enter new IP Address or CIDR range (e.g. 2.2.2.2/32): " bastionipinput
+    echo "export 'TF_VAR_bastion_ssh_allow_ip=[\"${bastionipinput}\"]'" >> .zsacrc
+
+if [[ $bastionipinput =~ ^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/(3[0-2]|[1-2][0-9]|[1-9]))$ ]]
+    then
+    echo "$bastionipinput - IP/Netmask valid"
+    else
+    echo "$bastionipinput is not valid IP CIDR format"
+    echo "Delete .zsacrc file and re-run zsec up..."
+    exit 1
+fi
+    break
+    ;;
+	no|n )
+    echo "SSH access permitted for all IP addresses..."
+    break
+    ;;
+	* ) echo "invalid response. Please enter yes or no";;
+    esac
+done
+fi
+
+
+# if .zsacrc is not present we'll assume that GCP env was never set
+if [[ "$oper" == "up" ]]; then
+acvm_instance_type_default="n2-standard-2"
+while true; do
+    echo "Full GCP VM Type List: https://cloud.google.com/compute/docs/machine-resource"
+    echo "This script supports: n2-standard-2, e2-standard-2, n2-standard-4, e2-standard-4, n2-standard-8, and e2-standard-8"
+    read -r -p "Enter desired GCP VM type for AC (e.g. n2-standard-2 or e2-standard-2):  [Default=$acvm_instance_type_default]: " acvm_instance_type_input
+acvm_instance_type=${acvm_instance_type_input:-$acvm_instance_type_default}
+case $acvm_instance_type in
+	e2-standard-2|e2-standard-4|e2-standard-8|n2-standard-2|n2-standard-4|n2-standard-8)
+    echo "App Connector VM type: ${acvm_instance_type}"
+    echo "export TF_VAR_acvm_instance_type=${acvm_instance_type}" >> .zsacrc
+    break
+    ;;
+	*)
+    echo "Invalid App Connector VM type: ${acvm_instance_type}. Please enter an approved VM type"
+    esac
+done
+
+
+az_count_default=2
+    read -r -p "Enter how many Availability Zone subnets [1-3] to deploy across? [Default=$az_count_default]: " az_count_input
+az_count=${az_count_input:-$az_count_default}
+if ((az_count >= 1 && az_count <= 3)); then
+    echo "$dtype will deploy App Connectors across $az_count Zonal Instance Groups in $gcp_location"
+    echo "export TF_VAR_az_count=$az_count" >> .zsacrc
+else
+    echo "invalid az_count value. Must be a number between 1 and 3"
+    echo "Delete .zsacrc file and re-run zsec up..."
+    exit 1
+fi  
+
+ac_count_default=2
+    echo "You have selected $az_count zones to deploy ACs"
+    read -p "Enter how many App Connectors to deploy in each zone? [Default=$ac_count_default]: " ac_count_input
+ac_count=${ac_count_input:-$ac_count_default}
+if ((ac_count >= 1 && ac_count <= 10)); then
+    echo "$dtype will deploy $ac_count App Connectors in each [$az_count] Zonal Instance Groups in $gcp_location"
+    echo "export TF_VAR_ac_count=$ac_count" >> .zsacrc
+else
+    echo "invalid ac_count value. Must be a number between 1 and 20"
+    echo "Delete .zsacrc file and re-run zsec up..."
+    exit 1
+fi  
+
+
+if [[ "$dtype" == "ac"* ]]; then
+    echo "Configure Networking Infrastructure..."
+    while true; do
+    read -r -p "Are you deploying to existing VPC Networks in $project_id? (yes/no): " byo_vpc_response
+        case $byo_vpc_response in 
+	yes|y ) 
+    echo "Using an existing VPC..."
+    echo "export TF_VAR_byo_vpc=true" >> .zsacrc
+    byo_vpc=true
+    read -r -p "Enter existing VPC name (E.g vpc-ac): " byo_vpc
+    echo "You entered $byo_vpc"
+    echo "export TF_VAR_byo_vpc_name=$byo_vpc" >> .zsacrc
+    break
+    ;;
+	no|n )
+    echo "Terraform will create new VPC + Subnet, Cloud Router, and NAT Gateway for App Connectors..."
+    echo "export TF_VAR_byo_vpc=false" >> .zsacrc
+    break
+    ;;
+	* ) echo "invalid response. Please enter yes or no";;
+        esac
+    done
+fi
+
+# Query for existing subnet IDs if byo_vpc true
+if [[ "$byo_vpc" == "true" ]]; then
+    echo "Attemping deployment to existing VPCs..."
+    while true; do
+    read -r -p "Are you deploying to existing subnets in each VPC? (yes/no): " byo_subnet_response
+    case $byo_subnet_response in 
+	yes|y ) 
+    echo "Using existing subnets for App Connector..."
+    echo "export TF_VAR_byo_subnets=true" >> .zsacrc
+    read -r -p "Please enter the VPC subnet name (E.g shared-vpc-subnet-ac): " ac_subnet
+    echo "You entered $ac_subnet"
+    echo "export TF_VAR_byo_subnet_name=$ac_subnet" >> .zsacrc
+    break
+    ;;
+	no|n )
+    echo "Terraform will attempt to create a new subnet in $byo_vpc"
+    echo "export TF_VAR_byo_subnets=false" >> .zsacrc
+    byo_subnets=false
+    break
+    ;;
+	* ) echo "invalid response. Please enter yes or no";;
+        esac
+    done
+fi
+
+
+#Query for subnet creation range override
+if [[ "$byo_subnets" == "false" ]]; then
+subnet_ac_default="10.0.1.0/24"
+    echo "Existing VPCs selected, but subnets need created..."
+    echo "By default, Terraform will create a new Subnet with a CIDR range of $subnet_ac_default"
+    while true; do
+    read -r -p "Do you want to manually define the AC subnet CIDR range instead? (yes/no): " change_ac_cidr_response
+    case $change_ac_cidr_response in 
+	yes|y )
+    echo "Configuring App Connector subnet range..."
+    read -r -p "Please enter the AC VPC subnet CIDR (E.g 10.2.0.0/24): " custom_ac_subnet
+    echo "You entered $custom_ac_subnet"
+    echo "export TF_VAR_subnet_ac='$custom_ac_subnet'"
+    break
+    ;;
+	no|n )
+    echo "Terraform will attempt to automatically create a new subnet in $byo_vpc"
+    break
+    ;;
+	* ) echo "invalid response. Please enter yes or no";;
+        esac
+    done 
+fi
+
+# Query for existing Cloud Routers if byo_vpc true
+if [[ "$byo_vpc" == "true" ]]; then
+    while true; do
+    read -r -p "Does your VPC already have a Cloud Router associated? (yes/no): " byo_router_response
+        case $byo_router_response in 
+	yes|y ) 
+    echo "Using existing Cloud Routers..."
+    echo "export TF_VAR_byo_router=true" >> .zsacrc
+    byo_router=true
+    read -r -p "Enter existing VPC Cloud Router name (E.g shared-vpc-router): " byo_router_name
+    echo "export TF_VAR_byo_router_name=$byo_router_name" >> .zsacrc
+    break
+    ;;
+	no|n )
+    echo "Terraform will attempt to create a new Cloud Routers in $byo_vpc"
+    echo "export TF_VAR_byo_router=false" >> .zsacrc
+    break
+    ;;
+	* ) echo "invalid response. Please enter yes or no";;
+        esac
+    done
+fi
+
+# Query for existing Cloud NAT Gateways if byo_vpc true
+if [[ "$byo_vpc" == "true" ]]; then
+    while true; do
+    read -r -p "Does VPC already have a NAT Gateway associated? (yes/no): " byo_ngw_response
+    case $byo_ngw_response in 
+	yes|y ) 
+    echo "Using existing NAT Gateway for App Connector connectivity..."
+    echo "export TF_VAR_byo_natgw=true" >> .zsacrc
+    read -r -p "Enter existing VPC Cloud NAT name (E.g shared-vpc-nat): " byo_natgw_name
+    echo "export TF_VAR_byo_natgw_name=$byo_natgw_name" >> .zsacrc
+    break
+    ;;
+	no|n )
+    echo "Terraform will attempt to create a new NAT Gateway resource in $byo_vpc"
+    echo "export TF_VAR_byo_natgw=false" >> .zsacrc
+    break
+    ;;
+	* ) echo "invalid response. Please enter yes or no";;
+        esac
+    done
+fi
+
+fi
+fi
+
+
+ #add local bin directory to PATH
+if ! grep -Fxq "export PATH=\${PATH}:\${PWD}/bin" .zsacrc; then
+    echo 'export PATH=${PATH}:${PWD}/bin' >> .zsacrc
+fi
+
+# add deployment type to .zsacrc for future runs
+if [[ "$oper" == "up" ]]; then
+    echo "Updating .zsacrc with dtype of $dtype"
+    sed -i'' -e '/dtype/d' .zsacrc
+    echo "export dtype=${dtype}" >> .zsacrc
+fi
+
+# initialize environment variables
+
+. ./.zsacrc
+
+# check for valid environment variables in .zsacrc
+if [ -z "$TF_VAR_credentials" ] || [ -z "$TF_VAR_project" ]; then
+    echo "GCP Access info is missing. Remove .zsacrc file and rerun $0 $1"
+    exit 1
+fi
+
+if [[ $dtype != "base" ]]; then
+    echo "Checking App Connector provisioning info"
+  if [ -z "$TF_VAR_acvm_instance_type" ]; then
+    echo "App Connector provisioning info is missing. Remove .zsacrc file and rerun $0 $1"
+    exit 1
+  fi
+fi
+
+echo "Download terraform binary for $ostype if not present..."
+if [[ ! -e ./$dir/terraform ]]; then
+    curl -o ./$dir/terraform_${tversion}_${arch}.zip https://releases.hashicorp.com/terraform/$tversion/terraform_${tversion}_${os_str}_${arch}.zip
+    unzip ./$dir/terraform_${tversion}_${arch}.zip -d ./$dir
+    rm -f ./$dir/terraform_${tversion}_${arch}.zip
+fi
+
+if [[ "$oper" == "do" ]]; then
+    exit 1
+fi
+
+if [[ "$oper" == "up" ]]; then
+    echo "Bringing up App Connector cluster..."
+    TF_DATA_DIR=./.terraform ./$dir/terraform -chdir="$dtype" init
+    if [[ "$AUTO_APPROVE" ]]; then
+        TF_DATA_DIR=./.terraform ./$dir/terraform -chdir="$dtype" apply -auto-approve
+    else
+        TF_DATA_DIR=./.terraform ./$dir/terraform -chdir="$dtype" apply
+    fi
+
+elif [[ "$oper" == "destroy" ]]; then
+    echo "Destroying App Connector cluster..."
+    TF_DATA_DIR=./.terraform ./$dir/terraform -chdir="$dtype" init
+    if [[ "$AUTO_APPROVE" ]]; then
+        TF_DATA_DIR=./.terraform ./$dir/terraform -chdir="$dtype" destroy -auto-approve
+    else
+      TF_DATA_DIR=./.terraform ./$dir/terraform -chdir="$dtype" destroy
+    fi
+    echo "Removing Terraform files and directories..."
+    rm -rf bin
+    rm -rf $dtype/terraform.tfstate*
+    rm -rf **/.terraform/* && rm -rf **/.terraform*
+    find . -type f -name '.terraform.lock.hcl' -delete
+    rm -rf .terraform* && rm -f terraform.tfstate*
+    rm -f *.pem && rm -f *.pem.pub
+    rm -f name_prefix random_string
+    rm -rf user.key user.crt
+    rm -rf systems.json setup-*.tar
+    rm -rf **/errorlog.txt
+now=$(date +'%Y-%m-%d-%H_%M_%S')
+    echo "archiving .zsacrc file to .zsacrc-${now}"
+    cp .zsacrc .zsacrc-${now}
+    rm -rf .zsacrc && rm -rf .zsacrc.bak
+fi
