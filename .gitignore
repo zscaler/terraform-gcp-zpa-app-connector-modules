@@ -49,6 +49,5 @@ override.tf.json
 
 # My stuff
 .todo
-
-# GCP specific
-*.json
+local_test
+/local_test
