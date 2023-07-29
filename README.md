@@ -42,7 +42,7 @@ version 0.13.7 should be generally supported.
 See: [Zscaler App Connector Deployment Guide for CentOS, Oracle, Redhat](https://help.zscaler.com/zpa/connector-deployment-guide-centos-oracle-and-redhat) for additional prerequisite provisioning steps.
 
 ### **Terraform client requirements**
-6. If executing Terraform via the "zsec" wrapper bash script, it is advised that you run from a MacOS or Linux workstation. Minimum installed application requirements to successfully from the script are:
+7. If executing Terraform via the "zsec" wrapper bash script, it is advised that you run from a MacOS or Linux workstation. Minimum installed application requirements to successfully from the script are:
 - bash
 - curl
 - unzip

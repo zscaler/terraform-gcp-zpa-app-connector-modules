@@ -33,16 +33,17 @@ variable "zones" {
 variable "acvm_instance_type" {
   type        = string
   description = "App Connector Instance Type"
-  default     = "n2-standard-2"
+  default     = "n2-standard-4"
   validation {
     condition = (
-      var.acvm_instance_type == "e2-standard-2" ||
-      var.acvm_instance_type == "e2-standard-4" ||
-      var.acvm_instance_type == "e2-standard-8" ||
-      var.acvm_instance_type == "n2-standard-2" ||
       var.acvm_instance_type == "n2-standard-4" ||
-      var.acvm_instance_type == "n2-standard-8"
-
+      var.acvm_instance_type == "n2-highcpu-4" ||
+      var.acvm_instance_type == "n1-standard-4" ||
+      var.acvm_instance_type == "n1-highcpu-4" ||
+      var.acvm_instance_type == "n2-standard-8" ||
+      var.acvm_instance_type == "n2-highcpu-8" ||
+      var.acvm_instance_type == "n1-standard-8" ||
+      var.acvm_instance_type == "n1-highcpu-8"
     )
     error_message = "Input acvm_instance_type must be set to an approved vm instance type."
   }

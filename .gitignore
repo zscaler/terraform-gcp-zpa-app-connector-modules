@@ -19,6 +19,7 @@ examples/.*rc*
 user_data
 system-*.tar
 **/testbed*
+*.json
 
 # Crash log files
 crash.log
