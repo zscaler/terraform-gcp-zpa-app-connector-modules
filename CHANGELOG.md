@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+### [1.0.1](https://github.com/zscaler/terraform-gcp-zpa-app-connector-modules/compare/v1.0.0...v1.0.1) (2023-07-29)
+
+
+### Bug Fixes
+
+* default vm type n2-standard-4 ([4536a6c](https://github.com/zscaler/terraform-gcp-zpa-app-connector-modules/commit/4536a6cd6f9ede861e87e05c38f590e0c9c36376))
+
 ## 1.0.0 (2023-07-27)
 
 
