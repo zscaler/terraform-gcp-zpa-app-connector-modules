@@ -78,8 +78,8 @@ jobs:
           client_id : ${{ secrets.ZSCANNER_CLIENT_ID }}
           client_secret : ${{ secrets.ZSCANNER_CLIENT_SECRET }}
           region : 'US'
-          iac_dir : '../../modules'
-          iac_file : '../../modules'
+          iac_dir : '../'
+          iac_file : '../'
           output_format : 'human+github-sarif'
           fail_build : 'false'
       - name: Upload SARIF file
