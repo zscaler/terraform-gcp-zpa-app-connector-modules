@@ -72,14 +72,14 @@ jobs:
         uses: actions/checkout@v2
 
       - name : Zscaler IAC Scan
-        uses : ZscalerCWP/Zscaler-IaC-Action@v1.4.0
+        uses : ZscalerCWP/Zscaler-IaC-Action@v1.5.0
         id: zscaler-iac-scan
         with:
           client_id : ${{ secrets.ZSCANNER_CLIENT_ID }}
           client_secret : ${{ secrets.ZSCANNER_CLIENT_SECRET }}
           region : 'US'
-          iac_dir : '../../'
-          iac_file : '../../'
+          iac_dir : '../../modules'
+          iac_file : '../../modules'
           output_format : 'human+github-sarif'
           fail_build : 'false'
       - name: Upload SARIF file
