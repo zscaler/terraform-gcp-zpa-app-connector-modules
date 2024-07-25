@@ -110,7 +110,7 @@
 ## Example: Region is us-central1 with az_count set to 2. Terraform will create 1 Instance Group in us-central1-a and 1x Instance Group in us-central1-b
 ##          (or whatever first two zones report back as available)
 
-#az_count                                   = 1
+# az_count                                   = 2
 
 
 ## Option B. If you require Instance Groups to be set explicitly in certain availability zones, you can override the region lookup and set the zones.
@@ -124,11 +124,11 @@
 ##    (Default: varies per deployment type template)
 ##    E.g. ac_count set to 2 and var.az_count or var.zones set to 2 will create 2x Zonal Instance Groups with 2x target CCs in each Instance Group
 
-#ac_count                                   = 1
+# ac_count                                   = 2
 
-## 13. Custom image name to used for deploying App Connector appliances. By default, Terraform will lookup the latest CentOS 7 image version from the Google Marketplace.
+## 13. Custom image name to used for deploying App Connector appliances. By default, Terraform will lookup the latest Red Hat Enterprise Linux 9 image version from the Google Marketplace.
 ##     This variable is provided if a customer desires to override/retain a specific image name/Instance Template version
 
 ## Note: It is NOT RECOMMENDED to statically set AC image versions. Zscaler recommends always running/deploying the latest version template
 
-#image_id                                   = "centos-7-v20230711"
+#image_id                                   = "rhel-9-v20240709"

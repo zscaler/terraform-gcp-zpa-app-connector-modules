@@ -11,14 +11,16 @@
 3.  GCP Region (E.g. us-central1)
 
 ### Zscaler requirements
-4. A valid Zscaler Private Access subscription and portal access
-5. Zscaler ZPA API Keys. Details on how to find and generate ZPA API keys can be located here: https://help.zscaler.com/zpa/about-api-keys#:~:text=An%20API%20key%20is%20required,from%20the%20API%20Keys%20page
+This module leverages the Zscaler Private Access [ZPA Terraform Provider](https://registry.terraform.io/providers/zscaler/zpa/latest/docs) for the automated onboarding process. Before proceeding make sure you have the following pre-requistes ready.
+
+1. A valid Zscaler Private Access subscription and portal access
+2. Zscaler ZPA API Keys. Details on how to find and generate ZPA API keys can be located [here](https://help.zscaler.com/zpa/about-api-keys#:~:text=An%20API%20key%20is%20required,from%20the%20API%20Keys%20page)
 - Client ID
 - Client Secret
 - Customer ID
-6. (Optional) An existing App Connector Group and Provisioning Key. Otherwise, you can follow the prompts in the examples terraform.tfvars to create a new Connector Group and Provisioning Key
+3. (Optional) An existing App Connector Group and Provisioning Key. Otherwise, you can follow the prompts in the examples terraform.tfvars to create a new Connector Group and Provisioning Key
 
-See: [Zscaler App Connector Deployment Guide for CentOS, Oracle, Redhat](https://help.zscaler.com/zpa/connector-deployment-guide-centos-oracle-and-redhat) for additional prerequisite provisioning steps.
+See: [Zscaler App Connector Deployment for Linux](https://help.zscaler.com/zpa/app-connector-deployment-guide-linux) for additional prerequisite provisioning steps.
 
 ### **Terraform client requirements**
 7. If executing Terraform via the "zsec" wrapper bash script, it is advised that you run from a MacOS or Linux workstation. Minimum installed application requirements to successfully from the script are:
