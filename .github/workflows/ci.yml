@@ -61,7 +61,7 @@ jobs:
       - name: Terraform Validate
         id: validate-zpa-app-connector-group
         run: |
-          cd modules/terraform-app-connector-group
+          cd modules/terraform-zpa-app-connector-group
           terraform validate -no-color
   
       - name: Terraform Init
