@@ -1,29 +1,34 @@
-<a href="https://terraform.io">
-    <img src="https://raw.githubusercontent.com/hashicorp/terraform-website/master/public/img/logo-text.svg" alt="Terraform logo" title="Terraform" height="50" width="250" />
-</a>
-<a href="https://www.zscaler.com/">
-    <img src="https://www.zscaler.com/themes/custom/zscaler/logo.svg" alt="Zscaler logo" title="Zscaler" height="50" width="250" />
-</a>
+![GitHub release (latest by date)](https://img.shields.io/github/v/release/zscaler/terraform-gcp-zpa-app-connector-modules?style=flat-square)
+![GitHub](https://img.shields.io/github/license/zscaler/terraform-gcp-zpa-app-connector-modules?style=flat-square)
+![GitHub pull requests](https://img.shields.io/github/issues-pr/zscaler/terraform-gcp-zpa-app-connector-modules?style=flat-square)
+![Terraform registry downloads total](https://img.shields.io/badge/dynamic/json?color=green&label=downloads%20total&query=data.attributes.total&url=https%3A%2F%2Fregistry.terraform.io%2Fv2%2Fmodules%2Fzscaler%2Fzpa-app-connector-modules%2Fgcp%2Fdownloads%2Fsummary&style=flat-square)
+![Terraform registry download month](https://img.shields.io/badge/dynamic/json?color=green&label=downloads%20this%20month&query=data.attributes.month&url=https%3A%2F%2Fregistry.terraform.io%2Fv2%2Fmodules%2Fzscaler%2Fzpa-app-connector-modules%2Fgcp%2Fdownloads%2Fsummary&style=flat-square)
+[![Zscaler Community](https://img.shields.io/badge/zscaler-community-blue)](https://community.zscaler.com/)
 
-Zscaler App Connector GCP Terraform Modules
-===========================================================================================================
+# Zscaler App Connector GCP Terraform Modules
+
+## Support Disclaimer
+
+-> **Disclaimer:** Please refer to our [General Support Statement](docs/guides/support.md) before proceeding with the use of this provider.
 
 ## Description
 This repository contains various modules and deployment configurations that can be used to deploy Zscaler App Connector appliances to securely connect to workloads within Google Cloud (GCP) via the Zscaler Zero Trust Exchange. The [examples](examples/) directory contains complete automation scripts for both greenfield/POV and brownfield/production use.
 
-These deployment templates are intended to be fully functional and self service for both greenfield/pov as well as production use. All modules may also be utilized as design recommendation based on Zscaler's Official [Zero Trust Access to Private Apps in AWS with ZPA](https://www.zscaler.com/resources/reference-architecture/zero-trust-with-zpa.pdf).
+These deployment templates are intended to be fully functional and self service for both greenfield/pov as well as production use. All modules may also be utilized as design recommendation based on Zscaler's Official [Zero Trust Access to Private Apps in GCP with ZPA](https://www.zscaler.com/resources/reference-architecture/zero-trust-with-zpa.pdf).
+
+~> **IMPORTANT** As of version 1.1.0 of this module, all App Connectors are deployed using the new [Red Hat Enterprise Linux 9](https://help.zscaler.com/zpa/app-connector-red-hat-enterprise-linux-9-migration)
 
 ## **Prerequisites**
 
 The GCP Terraform scripts leverage Terraform v1.1.9 which includes full binary and provider support for macOS M1 chips, but any Terraform
 version 0.13.7 should be generally supported.
 
--   provider registry.terraform.io/hashicorp/google v4.70.x
--   provider registry.terraform.io/hashicorp/random v3.3.x
--   provider registry.terraform.io/hashicorp/local v2.2.x
--   provider registry.terraform.io/hashicorp/null v3.1.x
--   provider registry.terraform.io/providers/hashicorp/tls v3.4.x
--   provider registry.terraform.io/providers/zscaler/zpa v2.8.x
+-   provider registry.terraform.io/hashicorp/google v5.38.x
+-   provider registry.terraform.io/hashicorp/random v3.6.x
+-   provider registry.terraform.io/hashicorp/local v2.5.x
+-   provider registry.terraform.io/hashicorp/null v3.2.x
+-   provider registry.terraform.io/providers/hashicorp/tls v4.0.x
+-   provider registry.terraform.io/providers/zscaler/zpa v3.31.x
 
 ### **GCP requirements**
 
@@ -32,17 +37,19 @@ version 0.13.7 should be generally supported.
 3.  GCP Region (E.g. us-central1)
 
 ### Zscaler requirements
-4. A valid Zscaler Private Access subscription and portal access
-5. Zscaler ZPA API Keys. Details on how to find and generate ZPA API keys can be located here: https://help.zscaler.com/zpa/about-api-keys#:~:text=An%20API%20key%20is%20required,from%20the%20API%20Keys%20page
+This module leverages the Zscaler Private Access [ZPA Terraform Provider](https://registry.terraform.io/providers/zscaler/zpa/latest/docs) for the automated onboarding process. Before proceeding make sure you have the following pre-requistes ready.
+
+1. A valid Zscaler Private Access subscription and portal access
+2. Zscaler ZPA API Keys. Details on how to find and generate ZPA API keys can be located [here](https://help.zscaler.com/zpa/about-api-keys#:~:text=An%20API%20key%20is%20required,from%20the%20API%20Keys%20page)
 - Client ID
 - Client Secret
 - Customer ID
-6. (Optional) An existing App Connector Group and Provisioning Key. Otherwise, you can follow the prompts in the examples terraform.tfvars to create a new Connector Group and Provisioning Key
+3. (Optional) An existing App Connector Group and Provisioning Key. Otherwise, you can follow the prompts in the examples terraform.tfvars to create a new Connector Group and Provisioning Key
 
-See: [Zscaler App Connector Deployment Guide for CentOS, Oracle, Redhat](https://help.zscaler.com/zpa/connector-deployment-guide-centos-oracle-and-redhat) for additional prerequisite provisioning steps.
+See: [Zscaler App Connector Deployment for Linux](https://help.zscaler.com/zpa/app-connector-deployment-guide-linux) for additional prerequisite provisioning steps.
 
 ### **Terraform client requirements**
-7. If executing Terraform via the "zsec" wrapper bash script, it is advised that you run from a MacOS or Linux workstation. Minimum installed application requirements to successfully from the script are:
+If executing Terraform via the "zsec" wrapper bash script, it is advised that you run from a MacOS or Linux workstation. Minimum installed application requirements to successfully from the script are:
 - bash
 - curl
 - unzip
@@ -62,7 +69,7 @@ This repository follows the [Hashicorp Standard Modules Structure](https://www.t
 ## Versioning
 
 These modules follow recommended release tagging in [Semantic Versioning](http://semver.org/). You can find each new release,
-along with the changelog, on the GitHub [Releases](https://github.com/zscaler/terraform-aws-zpa-app-connector-modules/releases) page.
+along with the changelog, on the GitHub [Releases](https://github.com/zscaler/terraform-gcp-zpa-app-connector-modules/releases) page.
 
 # License and Copyright
 

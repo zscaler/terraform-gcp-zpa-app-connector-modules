@@ -40,21 +40,21 @@ From base_ac directory execute:
 | Name | Version |
 |------|---------|
 | <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) | >= 0.13.7, < 2.0.0 |
-| <a name="requirement_google"></a> [google](#requirement\_google) | ~> 4.70.0 |
-| <a name="requirement_local"></a> [local](#requirement\_local) | ~> 2.2.0 |
-| <a name="requirement_null"></a> [null](#requirement\_null) | ~> 3.1.0 |
-| <a name="requirement_random"></a> [random](#requirement\_random) | ~> 3.3.0 |
-| <a name="requirement_tls"></a> [tls](#requirement\_tls) | ~> 3.4.0 |
-| <a name="requirement_zpa"></a> [zpa](#requirement\_zpa) | ~> 2.8.0 |
+| <a name="requirement_google"></a> [google](#requirement\_google) | ~> 5.38.0 |
+| <a name="requirement_local"></a> [local](#requirement\_local) | ~> 2.5.0 |
+| <a name="requirement_null"></a> [null](#requirement\_null) | ~> 3.2.0 |
+| <a name="requirement_random"></a> [random](#requirement\_random) | ~> 3.6.0 |
+| <a name="requirement_tls"></a> [tls](#requirement\_tls) | ~> 4.0.0 |
+| <a name="requirement_zpa"></a> [zpa](#requirement\_zpa) | ~> 3.32.0 |
 
 ## Providers
 
 | Name | Version |
 |------|---------|
-| <a name="provider_google"></a> [google](#provider\_google) | ~> 4.70.0 |
-| <a name="provider_local"></a> [local](#provider\_local) | ~> 2.2.0 |
-| <a name="provider_random"></a> [random](#provider\_random) | ~> 3.3.0 |
-| <a name="provider_tls"></a> [tls](#provider\_tls) | ~> 3.4.0 |
+| <a name="provider_google"></a> [google](#provider\_google) | ~> 5.38.0 |
+| <a name="provider_local"></a> [local](#provider\_local) | ~> 2.5.0 |
+| <a name="provider_random"></a> [random](#provider\_random) | ~> 3.6.0 |
+| <a name="provider_tls"></a> [tls](#provider\_tls) | ~> 4.0.0 |
 
 ## Modules
 
@@ -85,14 +85,14 @@ From base_ac directory execute:
 | <a name="input_ac_count"></a> [ac\_count](#input\_ac\_count) | Default number of App Connector appliances to create per Instance Group/Availability Zone | `number` | `1` | no |
 | <a name="input_acvm_instance_type"></a> [acvm\_instance\_type](#input\_acvm\_instance\_type) | App Connector Instance Type | `string` | `"n2-standard-4"` | no |
 | <a name="input_allowed_ports"></a> [allowed\_ports](#input\_allowed\_ports) | A list of ports to permit inbound to App Connector Service VPC. Default empty list means to allow all. | `list(string)` | `[]` | no |
-| <a name="input_app_connector_group_country_code"></a> [app\_connector\_group\_country\_code](#input\_app\_connector\_group\_country\_code) | Optional: Country code of this App Connector Group. example 'US' | `string` | `""` | no |
+| <a name="input_app_connector_group_country_code"></a> [app\_connector\_group\_country\_code](#input\_app\_connector\_group\_country\_code) | Optional: Country code of this App Connector Group. example 'US' | `string` | `"US"` | no |
 | <a name="input_app_connector_group_description"></a> [app\_connector\_group\_description](#input\_app\_connector\_group\_description) | Optional: Description of the App Connector Group | `string` | `"This App Connector Group belongs to: "` | no |
 | <a name="input_app_connector_group_dns_query_type"></a> [app\_connector\_group\_dns\_query\_type](#input\_app\_connector\_group\_dns\_query\_type) | Whether to enable IPv4 or IPv6, or both, for DNS resolution of all applications in the App Connector Group | `string` | `"IPV4_IPV6"` | no |
 | <a name="input_app_connector_group_enabled"></a> [app\_connector\_group\_enabled](#input\_app\_connector\_group\_enabled) | Whether this App Connector Group is enabled or not | `bool` | `true` | no |
-| <a name="input_app_connector_group_latitude"></a> [app\_connector\_group\_latitude](#input\_app\_connector\_group\_latitude) | Latitude of the App Connector Group. Integer or decimal. With values in the range of -90 to 90 | `string` | `"37.3382082"` | no |
+| <a name="input_app_connector_group_latitude"></a> [app\_connector\_group\_latitude](#input\_app\_connector\_group\_latitude) | Latitude of the App Connector Group. Integer or decimal. With values in the range of -90 to 90 | `string` | `"37.33874"` | no |
 | <a name="input_app_connector_group_location"></a> [app\_connector\_group\_location](#input\_app\_connector\_group\_location) | location of the App Connector Group in City, State, Country format. example: 'San Jose, CA, USA' | `string` | `"San Jose, CA, USA"` | no |
-| <a name="input_app_connector_group_longitude"></a> [app\_connector\_group\_longitude](#input\_app\_connector\_group\_longitude) | Longitude of the App Connector Group. Integer or decimal. With values in the range of -90 to 90 | `string` | `"-121.8863286"` | no |
-| <a name="input_app_connector_group_override_version_profile"></a> [app\_connector\_group\_override\_version\_profile](#input\_app\_connector\_group\_override\_version\_profile) | Optional: Whether the default version profile of the App Connector Group is applied or overridden. Default: false | `bool` | `false` | no |
+| <a name="input_app_connector_group_longitude"></a> [app\_connector\_group\_longitude](#input\_app\_connector\_group\_longitude) | Longitude of the App Connector Group. Integer or decimal. With values in the range of -90 to 90 | `string` | `"-121.8852525"` | no |
+| <a name="input_app_connector_group_override_version_profile"></a> [app\_connector\_group\_override\_version\_profile](#input\_app\_connector\_group\_override\_version\_profile) | Optional: Whether the default version profile of the App Connector Group is applied or overridden. Default: false | `bool` | `true` | no |
 | <a name="input_app_connector_group_upgrade_day"></a> [app\_connector\_group\_upgrade\_day](#input\_app\_connector\_group\_upgrade\_day) | Optional: App Connectors in this group will attempt to update to a newer version of the software during this specified day. Default value: SUNDAY. List of valid days (i.e., SUNDAY, MONDAY, etc) | `string` | `"SUNDAY"` | no |
 | <a name="input_app_connector_group_upgrade_time_in_secs"></a> [app\_connector\_group\_upgrade\_time\_in\_secs](#input\_app\_connector\_group\_upgrade\_time\_in\_secs) | Optional: App Connectors in this group will attempt to update to a newer version of the software during this specified time. Default value: 66600. Integer in seconds (i.e., 66600). The integer should be greater than or equal to 0 and less than 86400, in 15 minute intervals | `string` | `"66600"` | no |
 | <a name="input_app_connector_group_version_profile_id"></a> [app\_connector\_group\_version\_profile\_id](#input\_app\_connector\_group\_version\_profile\_id) | Optional: ID of the version profile. To learn more, see Version Profile Use Cases. https://help.zscaler.com/zpa/configuring-version-profile | `string` | `"2"` | no |

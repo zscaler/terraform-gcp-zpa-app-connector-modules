@@ -126,12 +126,12 @@
 
 #ac_count                                   = 1
 
-## 13. Custom image name to used for deploying App Connector appliances. By default, Terraform will lookup the latest CentOS 7 image version from the Google Marketplace.
+## 13. Custom image name to used for deploying App Connector appliances. By default, Terraform will lookup the latest Red Hat Enterprise Linux 9 image version from the Google Marketplace.
 ##     This variable is provided if a customer desires to override/retain a specific image name/Instance Template version
 
 ## Note: It is NOT RECOMMENDED to statically set AC image versions. Zscaler recommends always running/deploying the latest version template
 
-#image_id                                   = "centos-7-v20230711"
+#image_id                                   = "rhel-9-v20240709"
 
 
 #####################################################################################################################

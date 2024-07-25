@@ -4,7 +4,7 @@ This module creates all resource dependencies required to configure and deploy A
 <br>
 <br>
 ## Considerations:
-Zscaler App Connector runs on any supported ".rpm" based Linux Distro. Since there is currently no Zscaler provided App Connector image in the GCP marketplace, we default to a supported image: projects/centos-cloud/global/images/centos-7-v20230711
+Zscaler App Connector runs on any supported ".rpm" based Linux Distro. Since there is currently no Zscaler provided App Connector image in the GCP marketplace, we default to a supported image: projects/rhel-cloud/global/images/rhel-9-v20240709
 <br>
 <br>
 Zscaler recommends deploying App Connectors via consistent/reusable templates with Compute Instances managed by Zonal Instance Groups. Zscaler does not currently support utilizing GCP specific features of Managed Instance Groups like Instance based Autohealing or Autoscaling with this deployment module.
@@ -16,16 +16,16 @@ Zscaler recommends deploying App Connectors via consistent/reusable templates wi
 | Name | Version |
 |------|---------|
 | <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) | >= 0.13.7, < 2.0.0 |
-| <a name="requirement_google"></a> [google](#requirement\_google) | ~> 4.70.0 |
-| <a name="requirement_local"></a> [local](#requirement\_local) | ~> 2.2.0 |
-| <a name="requirement_time"></a> [time](#requirement\_time) | ~> 0.9.1 |
+| <a name="requirement_google"></a> [google](#requirement\_google) | ~> 5.38.0 |
+| <a name="requirement_local"></a> [local](#requirement\_local) | ~> 2.5.0 |
+| <a name="requirement_time"></a> [time](#requirement\_time) | ~> 0.12.0 |
 
 ## Providers
 
 | Name | Version |
 |------|---------|
-| <a name="provider_google"></a> [google](#provider\_google) | ~> 4.70.0 |
-| <a name="provider_time"></a> [time](#provider\_time) | ~> 0.9.1 |
+| <a name="provider_google"></a> [google](#provider\_google) | ~> 5.38.0 |
+| <a name="provider_time"></a> [time](#provider\_time) | ~> 0.12.0 |
 
 ## Modules
 

@@ -21,7 +21,7 @@ resource "tls_private_key" "key" {
 
 resource "local_file" "private_key" {
   content         = tls_private_key.key.private_key_pem
-  filename        = "../${var.name_prefix}-key-${random_string.suffix.result}.pem"
+  filename        = "./${var.name_prefix}-key-${random_string.suffix.result}.pem"
   file_permission = "0600"
 }
 
@@ -105,54 +105,65 @@ module "zpa_provisioning_key" {
 ################################################################################
 # Create the user_data file with necessary bootstrap variables for App Connector registration
 locals {
-  userdata = <<USERDATA
+  rhel9userdata = <<RHEL9USERDATA
 #!/usr/bin/bash
+# Sleep to allow the system to initialize
 sleep 15
+
+# Create the Zscaler repository file
 touch /etc/yum.repos.d/zscaler.repo
 cat > /etc/yum.repos.d/zscaler.repo <<-EOT
 [zscaler]
 name=Zscaler Private Access Repository
-baseurl=https://yum.private.zscaler.com/yum/el7
+baseurl=https://yum.private.zscaler.com/yum/el9
 enabled=1
 gpgcheck=1
-gpgkey=https://yum.private.zscaler.com/gpg
+gpgkey=https://yum.private.zscaler.com/yum/el9/gpg
 EOT
 
+# Sleep to allow the repo file to be registered
 sleep 60
-#Install App Connector packages
-yum install zpa-connector -y
-#Stop the App Connector service which was auto-started at boot time
+
+# Install App Connector packages
+yum install -y zpa-connector
+
+# Stop the App Connector service which was auto-started at boot time
 systemctl stop zpa-connector
-#Create a file from the App Connector provisioning key created in the ZPA Admin Portal
-#Make sure that the provisioning key is between double quotes
+
+# Create a file from the App Connector provisioning key created in the ZPA Admin Portal
+# Make sure that the provisioning key is between double quotes
 echo "${module.zpa_provisioning_key.provisioning_key}" > /opt/zscaler/var/provision_key
 chmod 644 /opt/zscaler/var/provision_key
-#Run a yum update to apply the latest patches
+
+# Run a yum update to apply the latest patches
 yum update -y
-#Start the App Connector service to enroll it in the ZPA cloud
+
+# Start the App Connector service to enroll it in the ZPA cloud
 systemctl start zpa-connector
-#Wait for the App Connector to download latest build
+
+# Wait for the App Connector to download the latest build
 sleep 60
-#Stop and then start the App Connector for the latest build
+
+# Stop and then start the App Connector for the latest build
 systemctl stop zpa-connector
 systemctl start zpa-connector
-USERDATA
+RHEL9USERDATA
 }
 
 # Write the file to local filesystem for storage/reference
 resource "local_file" "user_data_file" {
-  content  = local.userdata
-  filename = "../user_data"
+  content  = local.rhel9userdata
+  filename = "./user_data"
 }
 
 
 ################################################################################
-# Locate Latest CentOS 7 Image
+# Locate Latest Red Hat Enterprise Linux 9 AMI for instance use
 ################################################################################
 data "google_compute_image" "zs_ac_img" {
   count   = var.image_name != "" ? 0 : 1
-  family  = "centos-7"
-  project = "centos-cloud"
+  family  = "rhel-9"
+  project = "rhel-cloud"
 }
 
 
@@ -180,7 +191,7 @@ module "ac_vm" {
   zones               = local.zones_list
   acvm_instance_type  = var.acvm_instance_type
   ssh_key             = tls_private_key.key.public_key_openssh
-  user_data           = local.userdata
+  user_data           = local.rhel9userdata
   ac_count            = var.ac_count
   acvm_vpc_subnetwork = module.network.ac_subnet
   image_name          = var.image_name != "" ? var.image_name : data.google_compute_image.zs_ac_img[0].self_link
