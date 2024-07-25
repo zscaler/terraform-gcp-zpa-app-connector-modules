@@ -46,26 +46,32 @@ jobs:
           cd modules/terraform-zsac-network-gcp
           terraform init   
 
-          - name: Terraform Validate
-          id: validate-zpa-app-connector-group
-          run: |
-            cd modules/terraform-zpa-app-connector-group
-            terraform validate -no-color
+      - name: Terraform Validate
+        id: validate-zpa-zsac-network-gcp
+        run: |
+          cd modules/terraform-zsac-network-gcp
+          terraform validate -no-color
   
       - name: Terraform Init
         id: init-zpa-app-connector-group
         run: |
           cd modules/terraform-zpa-app-connector-group
           terraform init   
-          - name: Terraform Validate
-          id: validate-zpa-provisioning-key
-          run: |
-            cd modules/terraform-zpa-provisioning-key
-            terraform validate -no-color
+
+      - name: Terraform Validate
+        id: validate-zpa-app-connector-group
+        run: |
+          cd modules/terraform-app-connector-group
+          terraform validate -no-color
   
       - name: Terraform Init
         id: init-zpa-provisioning-key
         run: |
           cd modules/terraform-zpa-provisioning-key
           terraform init   
-    
+
+      - name: Terraform Validate
+        id: validate-zpa-app-connector-group
+        run: |
+          cd modules/terraform-app-connector-group
+          terraform validate -no-color
