@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.0](https://github.com/zscaler/terraform-gcp-zpa-app-connector-modules/compare/v1.0.1...v1.1.0) (2024-07-25)
+
+
+### Features
+
+* Updated all modules to new Zscaler RHEL9 Images ([#5](https://github.com/zscaler/terraform-gcp-zpa-app-connector-modules/issues/5)) ([1174fbc](https://github.com/zscaler/terraform-gcp-zpa-app-connector-modules/commit/1174fbc2e09096ab01a05874cd35c015bedf428e))
+
 ### [1.0.1](https://github.com/zscaler/terraform-gcp-zpa-app-connector-modules/compare/v1.0.0...v1.0.1) (2023-07-29)
 
 
