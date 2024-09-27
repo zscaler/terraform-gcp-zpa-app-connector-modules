@@ -100,6 +100,11 @@ variable "image_name" {
   default     = ""
 }
 
+variable "use_zscaler_image" {
+  default     = true
+  type        = bool
+  description = "By default, App Connector will deploy via the Zscaler Latest Image. Setting this to false will deploy the latest Red Hat Enterprise Linux 9 Image instead"
+}
 
 # ZPA Provider specific variables for App Connector Group and Provisioning Key creation
 variable "byo_provisioning_key" {

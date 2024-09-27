@@ -112,5 +112,5 @@ variable "update_max_unavailable_fixed" {
 variable "disk_size" {
   type        = string
   description = "The size of the image in gigabytes. If not specified, it will inherit the size of its base image"
-  default     = "20"
+  default     = "64"
 }

@@ -102,10 +102,15 @@ variable "zones" {
 
 variable "image_name" {
   type        = string
-  description = "Custom image name to be used for deploying App Connector appliances. Ideally all VMs should be on the same Image as templates always pull the latest from Google Marketplace. This variable is provided if a customer desires to override/retain an old ami for existing deployments rather than upgrading and forcing a replacement. It is also inputted as a list to facilitate if a customer desired to manually upgrade select CCs deployed based on the cc_count index"
+  description = "Custom image name to be used for deploying App Connector appliances. Ideally all VMs should be on the same Image as templates always pull the latest from Google Marketplace. This variable is provided if a customer desires to override/retain an old image for existing deployments rather than upgrading and forcing a replacement. It is also inputted as a list to facilitate if a customer desired to manually upgrade select ACs deployed based on the ac_count index"
   default     = ""
 }
 
+variable "use_zscaler_image" {
+  default     = true
+  type        = bool
+  description = "By default, App Connector will deploy via the Zscaler Latest Image. Setting this to false will deploy the latest Red Hat Enterprise Linux 9 Image instead"
+}
 
 # ZPA Provider specific variables for App Connector Group and Provisioning Key creation
 variable "byo_provisioning_key" {
