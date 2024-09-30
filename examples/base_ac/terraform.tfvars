@@ -76,7 +76,7 @@
 ##    Due to GCP character constraints, there are validations where this value must be 12 or less characters and only
 ##    lower case.
 
-#name_prefix                                = "zsac"
+# name_prefix                                = "zsac"
 
 ## 9. App Connector GCP Compute Instance size selection. Uncomment acvm_instance_type line with desired vm size to change.
 ##    (Default: n2-standard-4)
@@ -118,7 +118,7 @@
 ## Note: By setting zone names here, Terraform will ignore any value set for variable az_count. We also cannot verify the availability correct naming syntax
 ##       of the names set.
 
-#zones                                      = ["us-central1-a","us-central1-b"]
+# zones                                      = ["us-central1-a","us-central1-b"]
 
 ## 12. The number of App Connector appliances to provision per Instance Group/Availability Zone.
 ##    (Default: varies per deployment type template)
@@ -131,4 +131,4 @@
 
 ## Note: It is NOT RECOMMENDED to statically set AC image versions. Zscaler recommends always running/deploying the latest version template
 
-#image_id                                   = "rhel-9-v20240709"
+# use_zscaler_image = true

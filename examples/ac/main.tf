@@ -92,7 +92,41 @@ module "zpa_provisioning_key" {
 
 
 ################################################################################
-# 4. Create specified number AC VMs per ac_count which will span equally across 
+# A. Create the user_data file with necessary bootstrap variables for App
+#    Connector registration. Used if variable use_zscaler_ami is set to true.
+################################################################################
+locals {
+  appuserdata = <<APPUSERDATA
+#!/bin/bash
+#Stop the App Connector service which was auto-started at boot time
+systemctl stop zpa-connector
+#Create a file from the App Connector provisioning key created in the ZPA Admin Portal
+#Make sure that the provisioning key is between double quotes
+echo "${module.zpa_provisioning_key.provisioning_key}" > /opt/zscaler/var/provision_key
+
+#Run a yum update to apply the latest patches
+yum update -y
+
+#Start the App Connector service to enroll it in the ZPA cloud
+systemctl start zpa-connector
+
+#Wait for the App Connector to download latest build
+sleep 60
+
+#Stop and then start the App Connector for the latest build
+systemctl stop zpa-connector
+systemctl start zpa-connector
+APPUSERDATA
+}
+
+resource "local_file" "user_data_file" {
+  count    = var.use_zscaler_image == true ? 1 : 0
+  content  = local.appuserdata
+  filename = "./user_data"
+}
+
+################################################################################
+# 5. Create specified number AC VMs per ac_count which will span equally across 
 #    designated availability zones per az_count. E.g. ac_count set to 4 and 
 #    az_count set to 2 will create 2x ACs in AZ1 and 2x ACs in AZ2
 ################################################################################
@@ -144,19 +178,33 @@ RHEL9USERDATA
 }
 
 # Write the file to local filesystem for storage/reference
-resource "local_file" "user_data_file" {
+resource "local_file" "rhel9_user_data_file" {
+  count    = var.use_zscaler_image == true ? 0 : 1
   content  = local.rhel9userdata
   filename = "./user_data"
+}
+
+################################################################################
+# Locate Latest App Connector Image on Google Markeplace by Project and Name
+################################################################################
+data "google_compute_image" "appconnector" {
+  count   = var.use_zscaler_image ? 1 : 0
+  project = "mpi-zpa-gcp-marketplace"
+  name    = "zpa-connector-el9-2024-08"
 }
 
 
 ################################################################################
 # Locate Latest Red Hat Enterprise Linux 9 Image for instance use
 ################################################################################
-data "google_compute_image" "zs_ac_img" {
+data "google_compute_image" "rhel_9_latest" {
   count   = var.image_name != "" ? 0 : 1
   family  = "rhel-9"
   project = "rhel-cloud"
+}
+
+locals {
+  image_selected = try(data.google_compute_image.appconnector[0].self_link, data.google_compute_image.rhel_9_latest[0].self_link)
 }
 
 ################################################################################
@@ -186,5 +234,5 @@ module "ac_vm" {
   user_data           = local.rhel9userdata
   ac_count            = var.ac_count
   acvm_vpc_subnetwork = module.network.ac_subnet
-  image_name          = var.image_name != "" ? var.image_name : data.google_compute_image.zs_ac_img[0].self_link
+  image_name          = var.image_name != "" ? var.image_name : local.image_selected
 }

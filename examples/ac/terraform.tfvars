@@ -131,7 +131,7 @@
 
 ## Note: It is NOT RECOMMENDED to statically set AC image versions. Zscaler recommends always running/deploying the latest version template
 
-#image_id                                   = "rhel-9-v20240709"
+# use_zscaler_image = true
 
 
 #####################################################################################################################
