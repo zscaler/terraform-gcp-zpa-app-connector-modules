@@ -3,6 +3,7 @@
 ![GitHub pull requests](https://img.shields.io/github/issues-pr/zscaler/terraform-gcp-zpa-app-connector-modules?style=flat-square)
 ![Terraform registry downloads total](https://img.shields.io/badge/dynamic/json?color=green&label=downloads%20total&query=data.attributes.total&url=https%3A%2F%2Fregistry.terraform.io%2Fv2%2Fmodules%2Fzscaler%2Fzpa-app-connector-modules%2Fgcp%2Fdownloads%2Fsummary&style=flat-square)
 ![Terraform registry download month](https://img.shields.io/badge/dynamic/json?color=green&label=downloads%20this%20month&query=data.attributes.month&url=https%3A%2F%2Fregistry.terraform.io%2Fv2%2Fmodules%2Fzscaler%2Fzpa-app-connector-modules%2Fgcp%2Fdownloads%2Fsummary&style=flat-square)
+[![Automation Hub](https://img.shields.io/badge/automation-hub-blue)](https://automate.zscaler.com/docs/tools/sdk-documentation/sdk-getting-started)
 [![Zscaler Community](https://img.shields.io/badge/zscaler-community-blue)](https://community.zscaler.com/)
 
 # Zscaler App Connector GCP Terraform Modules
@@ -49,7 +50,7 @@ This module leverages the Zscaler Private Access [ZPA Terraform Provider](https:
 See: [Zscaler App Connector Deployment for Linux](https://help.zscaler.com/zpa/app-connector-deployment-guide-linux) for additional prerequisite provisioning steps.
 
 ### **Terraform client requirements**
-If executing Terraform via the "zsec" wrapper bash script, it is advised that you run from a MacOS or Linux workstation. Minimum installed application requirements to successfully from the script are:
+If executing Terraform via the "zsac" wrapper bash script, it is advised that you run from a MacOS or Linux workstation. Minimum installed application requirements to successfully from the script are:
 - bash
 - curl
 - unzip

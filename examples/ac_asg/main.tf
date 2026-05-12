@@ -1,0 +1,227 @@
+################################################################################
+# Generate a unique random string for resource name assignment and key pair
+################################################################################
+resource "random_string" "suffix" {
+  length  = 8
+  upper   = false
+  special = false
+}
+
+
+################################################################################
+# The following lines generates a new SSH key pair and stores the PEM file
+# locally. The public key output is used as the ssh_key passed variable
+# to the compute modules for admin_ssh_key public_key authentication.
+# This is not recommended for production deployments. Please consider modifying
+# to pass your own custom public key file located in a secure location.
+################################################################################
+resource "tls_private_key" "key" {
+  algorithm = var.tls_key_algorithm
+}
+
+resource "local_file" "private_key" {
+  content         = tls_private_key.key.private_key_pem
+  filename        = "./${var.name_prefix}-key-${random_string.suffix.result}.pem"
+  file_permission = "0600"
+}
+
+
+################################################################################
+# 1. Create/reference all network infrastructure resource dependencies for all
+#    child modules. Brownfield: BYO VPC / subnet / router / NAT supported.
+################################################################################
+module "network" {
+  source                         = "../../modules/terraform-zsac-network-gcp"
+  name_prefix                    = var.name_prefix
+  resource_tag                   = random_string.suffix.result
+  project                        = var.project
+  region                         = var.region
+  allowed_ssh_from_internal_cidr = [var.subnet_bastion]
+  allowed_ports                  = var.allowed_ports
+  subnet_ac                      = var.subnet_ac
+
+  byo_vpc      = var.byo_vpc
+  byo_vpc_name = var.byo_vpc_name
+
+  byo_subnets     = var.byo_subnets
+  byo_subnet_name = var.byo_subnet_name
+
+  byo_router      = var.byo_router
+  byo_router_name = var.byo_router_name
+
+  byo_natgw      = var.byo_natgw
+  byo_natgw_name = var.byo_natgw_name
+}
+
+
+################################################################################
+# 2. Create ZPA App Connector Group
+#
+# The "Connector" enrollment certificate is looked up internally by this module.
+################################################################################
+module "zpa_app_connector_group" {
+  count                                        = var.byo_provisioning_key == true ? 0 : 1
+  source                                       = "../../modules/terraform-zpa-app-connector-group"
+  app_connector_group_name                     = "${var.region}-${module.network.vpc_network_name}"
+  app_connector_group_description              = "${var.app_connector_group_description}-${var.region}-${module.network.vpc_network_name}"
+  app_connector_group_enabled                  = var.app_connector_group_enabled
+  app_connector_group_country_code             = var.app_connector_group_country_code
+  app_connector_group_latitude                 = var.app_connector_group_latitude
+  app_connector_group_longitude                = var.app_connector_group_longitude
+  app_connector_group_location                 = var.app_connector_group_location
+  app_connector_group_upgrade_day              = var.app_connector_group_upgrade_day
+  app_connector_group_upgrade_time_in_secs     = var.app_connector_group_upgrade_time_in_secs
+  app_connector_group_override_version_profile = var.app_connector_group_override_version_profile
+  app_connector_group_dns_query_type           = var.app_connector_group_dns_query_type
+}
+
+
+################################################################################
+# 3. Create ZPA Provisioning Key (or reference existing if byo set)
+################################################################################
+module "zpa_provisioning_key" {
+  source                            = "../../modules/terraform-zpa-provisioning-key"
+  provisioning_key_name             = "${var.region}-${module.network.vpc_network_name}"
+  provisioning_key_enabled          = var.provisioning_key_enabled
+  provisioning_key_association_type = var.provisioning_key_association_type
+  provisioning_key_max_usage        = var.provisioning_key_max_usage
+  app_connector_group_id            = try(module.zpa_app_connector_group[0].app_connector_group_id, "")
+  byo_provisioning_key              = var.byo_provisioning_key
+  byo_provisioning_key_name         = var.byo_provisioning_key_name
+}
+
+
+################################################################################
+# A. Zscaler-image bootstrap user_data
+################################################################################
+locals {
+  appuserdata = <<APPUSERDATA
+#!/bin/bash
+#Stop the App Connector service which was auto-started at boot time
+systemctl stop zpa-connector
+#Create a file from the App Connector provisioning key created in the ZPA Admin Portal
+echo "${module.zpa_provisioning_key.provisioning_key}" > /opt/zscaler/var/provision_key
+
+#Run a yum update to apply the latest patches
+yum update -y
+
+#Start the App Connector service to enroll it in the ZPA cloud
+systemctl start zpa-connector
+
+#Wait for the App Connector to download latest build
+sleep 60
+
+#Stop and then start the App Connector for the latest build
+systemctl stop zpa-connector
+systemctl start zpa-connector
+APPUSERDATA
+}
+
+resource "local_file" "user_data_file" {
+  count    = var.use_zscaler_image == true ? 1 : 0
+  content  = local.appuserdata
+  filename = "./user_data"
+}
+
+
+################################################################################
+# B. RHEL9 bootstrap user_data
+################################################################################
+locals {
+  rhel9userdata = <<RHEL9USERDATA
+#!/usr/bin/bash
+sleep 15
+
+touch /etc/yum.repos.d/zscaler.repo
+cat > /etc/yum.repos.d/zscaler.repo <<-EOT
+[zscaler]
+name=Zscaler Private Access Repository
+baseurl=https://yum.private.zscaler.com/yum/el9
+enabled=1
+gpgcheck=1
+gpgkey=https://yum.private.zscaler.com/yum/el9/gpg
+EOT
+
+sleep 60
+
+yum install -y zpa-connector
+
+systemctl stop zpa-connector
+
+echo "${module.zpa_provisioning_key.provisioning_key}" > /opt/zscaler/var/provision_key
+chmod 644 /opt/zscaler/var/provision_key
+
+yum update -y
+
+systemctl start zpa-connector
+
+sleep 60
+
+systemctl stop zpa-connector
+systemctl start zpa-connector
+RHEL9USERDATA
+}
+
+resource "local_file" "rhel9_user_data_file" {
+  count    = var.use_zscaler_image == true ? 0 : 1
+  content  = local.rhel9userdata
+  filename = "./user_data"
+}
+
+
+################################################################################
+# Locate Latest App Connector Image on Google Marketplace
+################################################################################
+data "google_compute_image" "appconnector" {
+  count   = var.use_zscaler_image ? 1 : 0
+  project = "mpi-zpa-gcp-marketplace"
+  name    = "zpa-connector-el9-2024-08"
+}
+
+data "google_compute_image" "rhel_9_latest" {
+  count   = var.image_name != "" ? 0 : 1
+  family  = "rhel-9"
+  project = "rhel-cloud"
+}
+
+locals {
+  image_selected = try(data.google_compute_image.appconnector[0].self_link, data.google_compute_image.rhel_9_latest[0].self_link)
+}
+
+
+################################################################################
+# Query for active list of available zones for var.region
+################################################################################
+data "google_compute_zones" "available" {
+  status = "UP"
+}
+
+locals {
+  zones_list = length(var.zones) == 0 ? slice(data.google_compute_zones.available.names, 0, var.az_count) : distinct(var.zones)
+}
+
+
+################################################################################
+# 4. Create the App Connector autoscaling group(s).
+#    One MIG + one Autoscaler per zone in zones_list.
+################################################################################
+module "ac_asg" {
+  source              = "../../modules/terraform-zsac-asg-gcp"
+  name_prefix         = var.name_prefix
+  resource_tag        = random_string.suffix.result
+  project             = var.project
+  region              = var.region
+  zones               = local.zones_list
+  acvm_instance_type  = var.acvm_instance_type
+  ssh_key             = tls_private_key.key.public_key_openssh
+  user_data           = var.use_zscaler_image == true ? local.appuserdata : local.rhel9userdata
+  acvm_vpc_subnetwork = module.network.ac_subnet
+  image_name          = var.image_name != "" ? var.image_name : local.image_selected
+
+  min_size                  = var.min_size
+  max_size                  = var.max_size
+  target_tracking_metric    = var.target_tracking_metric
+  target_cpu_util_value     = var.target_cpu_util_value
+  cooldown_period           = var.cooldown_period
+  health_check_grace_period = var.health_check_grace_period
+}

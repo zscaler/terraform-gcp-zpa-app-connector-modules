@@ -14,10 +14,11 @@
 ##    For any questions populating the below values, please reference:
 ##    https://registry.terraform.io/providers/zscaler/zpa/latest/docs/resources/zpa_provisioning_key
 
-#enrollment_cert                                = "Connector"
 #provisioning_key_name                          = "new_key_name"
 #provisioning_key_enabled                       = true
 #provisioning_key_max_usage                     = 10
+# Note: the "Connector" enrollment certificate is now resolved automatically
+# inside the modules. There is no longer an `enrollment_cert` input.
 
 ## 2. ZPA App Connector Group variables. Uncomment and replace default values as desired for your deployment.
 ##    For any questions populating the below values, please reference:
@@ -33,8 +34,10 @@
 #app_connector_group_upgrade_day                = "SUNDAY"
 #app_connector_group_upgrade_time_in_secs       = "66600"
 #app_connector_group_override_version_profile   = true
-#app_connector_group_version_profile_id         = "2"
 #app_connector_group_dns_query_type             = "IPV4_IPV6"
+# Note: the version profile is now pinned to "Default" inside the module via
+# `data "zpa_customer_version_profile"`. There is no longer an
+# `app_connector_group_version_profile_id` input.
 
 
 #####################################################################################################################

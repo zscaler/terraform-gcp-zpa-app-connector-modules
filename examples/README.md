@@ -55,7 +55,10 @@ Optional: Edit the terraform.tfvars file under your desired deployment type (ie:
 
 ```
 Deployment Type: (base_ac):
-base_ac: Creates 1 new "Management" VPC with 1 AC-Mgmt subnet and 1 bastion subnet; 1 Cloud Router + NAT Gateway; 1 Bastion Host assigned a dynamic public IP; generates local key pair .pem file for ssh access to all VMs; 1 App Connector compute instance template + option to deploy multiple App Connectors across multiple zonal managed instance groups for highly available/resilient workload Zero Trust App Access.
+base_ac: Creates 1 new "Management" VPC with 1 AC-Mgmt subnet and 1 bastion subnet; 1 Cloud Router + NAT Gateway; 1 Bastion Host assigned a dynamic public IP; generates local key pair .pem file for ssh access to all VMs; 1 App Connector compute instance template + option to deploy multiple App Connectors across multiple zonal managed instance groups (FIXED size, controlled by ac_count) for highly available/resilient workload Zero Trust App Access.
+
+Deployment Type: (base_ac_asg):
+base_ac_asg: Same network/bastion topology as base_ac, but the App Connector instance group is AUTOSCALING. Creates 1 Compute Instance Template + N per-zone Managed Instance Groups + N per-zone Compute Autoscalers, scaling between var.min_size and var.max_size based on a target-tracking metric (CPU, NetworkIn, or NetworkOut). Use for autoscaling labs / PoVs where load varies. See examples/base_ac_asg/README.md for details.
 ```
 
 **2. Brownfield Deployments**
@@ -79,7 +82,10 @@ Optional: Edit the terraform.tfvars file under your desired deployment type (ie:
 
 ```
 Deployment Type: (ac):
-ac: Creates 1 new "Management" VPC with 1 AC-Mgmt subnet; 1 Cloud Router + NAT Gateway; generates local key pair .pem file for ssh access to all VMs. All network infrastructure resource have conditional "byo" variables, that can be inputted if they already exist (like VPC, subnet, Cloud Router, and Cloud NAT); creates 1 App Connector compute instance template + option to deploy multiple App Connectors across multiple zonal managed instance groups for highly available/resilient workload Zero Trust App Access.
+ac: Creates 1 new "Management" VPC with 1 AC-Mgmt subnet; 1 Cloud Router + NAT Gateway; generates local key pair .pem file for ssh access to all VMs. All network infrastructure resources have conditional "byo" variables that can be set if they already exist (VPC, subnet, Cloud Router, Cloud NAT). Creates 1 App Connector compute instance template + option to deploy multiple App Connectors across multiple zonal managed instance groups (FIXED size, controlled by ac_count).
+
+Deployment Type: (ac_asg):
+ac_asg: Same brownfield BYO surface as ac (no bastion, optional VPC/subnet/router/NAT reuse), but the App Connector instance group is AUTOSCALING. Creates 1 Compute Instance Template + N per-zone Managed Instance Groups + N per-zone Compute Autoscalers, scaling between var.min_size and var.max_size based on a target-tracking metric (CPU, NetworkIn, or NetworkOut). This is the production-grade autoscaling deployment. See examples/ac_asg/README.md for details.
 ```
 
 ## Destroying the cluster

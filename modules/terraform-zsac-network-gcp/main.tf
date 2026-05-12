@@ -87,10 +87,25 @@ resource "google_compute_subnetwork" "vpc_subnet_bastion" {
 
 
 ################################################################################
-# Create pre-defined GCP Security Groups and rules for workload
+# Split user-supplied source ranges into IPv4 vs IPv6 buckets.
+#
+# GCP firewall rules cannot mix IPv4 and IPv6 source_ranges in a single rule
+# (see https://cloud.google.com/firewall/docs/using-firewalls), so we split
+# the user-supplied list and create two rules — one per address family.
+# Detection is by colon character: IPv6 CIDRs always contain ":", IPv4 never.
 ################################################################################
-resource "google_compute_firewall" "ac_mgmt" {
-  name    = "${var.name_prefix}-fw-for-ac-mgmt-${var.resource_tag}"
+locals {
+  allowed_ssh_from_internal_cidr_v4 = [for c in var.allowed_ssh_from_internal_cidr : c if !strcontains(c, ":")]
+  allowed_ssh_from_internal_cidr_v6 = [for c in var.allowed_ssh_from_internal_cidr : c if strcontains(c, ":")]
+}
+
+
+################################################################################
+# Create pre-defined GCP Security Groups and rules for workload (IPv4)
+################################################################################
+resource "google_compute_firewall" "ac_mgmt_v4" {
+  count   = length(local.allowed_ssh_from_internal_cidr_v4) > 0 ? 1 : 0
+  name    = "${var.name_prefix}-fw-for-ac-mgmt-v4-${var.resource_tag}"
   network = try(google_compute_network.vpc_network[0].self_link, data.google_compute_network.vpc_network_selected[0].self_link)
   allow {
     protocol = "tcp"
@@ -99,5 +114,23 @@ resource "google_compute_firewall" "ac_mgmt" {
   allow {
     protocol = "icmp"
   }
-  source_ranges = var.allowed_ssh_from_internal_cidr
+  source_ranges = local.allowed_ssh_from_internal_cidr_v4
+}
+
+
+################################################################################
+# Create pre-defined GCP Security Groups and rules for workload (IPv6)
+################################################################################
+resource "google_compute_firewall" "ac_mgmt_v6" {
+  count   = length(local.allowed_ssh_from_internal_cidr_v6) > 0 ? 1 : 0
+  name    = "${var.name_prefix}-fw-for-ac-mgmt-v6-${var.resource_tag}"
+  network = try(google_compute_network.vpc_network[0].self_link, data.google_compute_network.vpc_network_selected[0].self_link)
+  allow {
+    protocol = "tcp"
+    ports    = var.allowed_ports
+  }
+  allow {
+    protocol = "icmpv6"
+  }
+  source_ranges = local.allowed_ssh_from_internal_cidr_v6
 }

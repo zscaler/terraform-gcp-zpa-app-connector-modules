@@ -16,15 +16,15 @@ Zscaler recommends deploying App Connectors via consistent/reusable templates wi
 | Name | Version |
 |------|---------|
 | <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) | >= 0.13.7, < 2.0.0 |
-| <a name="requirement_google"></a> [google](#requirement\_google) | ~> 6.4.0 |
-| <a name="requirement_local"></a> [local](#requirement\_local) | ~> 2.5.0 |
+| <a name="requirement_google"></a> [google](#requirement\_google) | ~> 7.31.0 |
+| <a name="requirement_local"></a> [local](#requirement\_local) | ~> 2.8.0 |
 | <a name="requirement_time"></a> [time](#requirement\_time) | ~> 0.12.0 |
 
 ## Providers
 
 | Name | Version |
 |------|---------|
-| <a name="provider_google"></a> [google](#provider\_google) | ~> 6.4.0 |
+| <a name="provider_google"></a> [google](#provider\_google) | ~> 7.31.0 |
 | <a name="provider_time"></a> [time](#provider\_time) | ~> 0.12.0 |
 
 ## Modules

@@ -40,21 +40,21 @@ From base_ac directory execute:
 | Name | Version |
 |------|---------|
 | <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) | >= 0.13.7, < 2.0.0 |
-| <a name="requirement_google"></a> [google](#requirement\_google) | ~> 6.4.0 |
-| <a name="requirement_local"></a> [local](#requirement\_local) | ~> 2.5.0 |
+| <a name="requirement_google"></a> [google](#requirement\_google) | ~> 7.31.0 |
+| <a name="requirement_local"></a> [local](#requirement\_local) | ~> 2.8.0 |
 | <a name="requirement_null"></a> [null](#requirement\_null) | ~> 3.2.0 |
-| <a name="requirement_random"></a> [random](#requirement\_random) | ~> 3.6.0 |
-| <a name="requirement_tls"></a> [tls](#requirement\_tls) | ~> 4.0.0 |
-| <a name="requirement_zpa"></a> [zpa](#requirement\_zpa) | ~> 3.33.0 |
+| <a name="requirement_random"></a> [random](#requirement\_random) | ~> 3.8.0 |
+| <a name="requirement_tls"></a> [tls](#requirement\_tls) | ~> 4.2.0 |
+| <a name="requirement_zpa"></a> [zpa](#requirement\_zpa) | ~> 4.4.0 |
 
 ## Providers
 
 | Name | Version |
 |------|---------|
-| <a name="provider_google"></a> [google](#provider\_google) | ~> 6.4.0 |
-| <a name="provider_local"></a> [local](#provider\_local) | ~> 2.5.0 |
-| <a name="provider_random"></a> [random](#provider\_random) | ~> 3.6.0 |
-| <a name="provider_tls"></a> [tls](#provider\_tls) | ~> 4.0.0 |
+| <a name="provider_google"></a> [google](#provider\_google) | ~> 7.31.0 |
+| <a name="provider_local"></a> [local](#provider\_local) | ~> 2.8.0 |
+| <a name="provider_random"></a> [random](#provider\_random) | ~> 3.8.0 |
+| <a name="provider_tls"></a> [tls](#provider\_tls) | ~> 4.2.0 |
 
 ## Modules
 
@@ -97,13 +97,11 @@ From base_ac directory execute:
 | <a name="input_app_connector_group_override_version_profile"></a> [app\_connector\_group\_override\_version\_profile](#input\_app\_connector\_group\_override\_version\_profile) | Optional: Whether the default version profile of the App Connector Group is applied or overridden. Default: false | `bool` | `true` | no |
 | <a name="input_app_connector_group_upgrade_day"></a> [app\_connector\_group\_upgrade\_day](#input\_app\_connector\_group\_upgrade\_day) | Optional: App Connectors in this group will attempt to update to a newer version of the software during this specified day. Default value: SUNDAY. List of valid days (i.e., SUNDAY, MONDAY, etc) | `string` | `"SUNDAY"` | no |
 | <a name="input_app_connector_group_upgrade_time_in_secs"></a> [app\_connector\_group\_upgrade\_time\_in\_secs](#input\_app\_connector\_group\_upgrade\_time\_in\_secs) | Optional: App Connectors in this group will attempt to update to a newer version of the software during this specified time. Default value: 66600. Integer in seconds (i.e., 66600). The integer should be greater than or equal to 0 and less than 86400, in 15 minute intervals | `string` | `"66600"` | no |
-| <a name="input_app_connector_group_version_profile_id"></a> [app\_connector\_group\_version\_profile\_id](#input\_app\_connector\_group\_version\_profile\_id) | Optional: ID of the version profile. To learn more, see Version Profile Use Cases. https://help.zscaler.com/zpa/configuring-version-profile | `string` | `"2"` | no |
 | <a name="input_az_count"></a> [az\_count](#input\_az\_count) | Default number zonal instance groups to create based on availability zone | `number` | `1` | no |
-| <a name="input_bastion_ssh_allow_ip"></a> [bastion\_ssh\_allow\_ip](#input\_bastion\_ssh\_allow\_ip) | CIDR blocks of trusted networks for bastion host ssh access from Internet | `list(string)` | <pre>[<br>  "0.0.0.0/0"<br>]</pre> | no |
+| <a name="input_bastion_ssh_allow_ip"></a> [bastion\_ssh\_allow\_ip](#input\_bastion\_ssh\_allow\_ip) | CIDR blocks of trusted networks for bastion host ssh access from Internet | `list(string)` | <pre>[<br/>  "0.0.0.0/0"<br/>]</pre> | no |
 | <a name="input_byo_provisioning_key"></a> [byo\_provisioning\_key](#input\_byo\_provisioning\_key) | Bring your own App Connector Provisioning Key. Setting this variable to true will effectively instruct this module to not create any resources and only reference data resources from values provided in byo\_provisioning\_key\_name | `bool` | `false` | no |
 | <a name="input_byo_provisioning_key_name"></a> [byo\_provisioning\_key\_name](#input\_byo\_provisioning\_key\_name) | Existing App Connector Provisioning Key name | `string` | `"provisioning-key-tf"` | no |
-| <a name="input_credentials"></a> [credentials](#input\_credentials) | Path to the service account json file for terraform to authenticate to Google Cloud | `string` | n/a | yes |
-| <a name="input_enrollment_cert"></a> [enrollment\_cert](#input\_enrollment\_cert) | Get name of ZPA enrollment cert to be used for App Connector provisioning | `string` | `"Connector"` | no |
+| <a name="input_credentials"></a> [credentials](#input\_credentials) | Optional path to a Google Cloud service account JSON key file. Leave unset (null) to fall back to Application Default Credentials (ADC), e.g. `gcloud auth application-default login` or a workload identity. The variable is also satisfied by the `GOOGLE_CREDENTIALS` env var read directly by the google provider. | `string` | `null` | no |
 | <a name="input_image_name"></a> [image\_name](#input\_image\_name) | Custom image name to be used for deploying App Connector appliances. Ideally all VMs should be on the same Image as templates always pull the latest from Google Marketplace. This variable is provided if a customer desires to override/retain an old image for existing deployments rather than upgrading and forcing a replacement. It is also inputted as a list to facilitate if a customer desired to manually upgrade select ACs deployed based on the ac\_count index | `string` | `""` | no |
 | <a name="input_name_prefix"></a> [name\_prefix](#input\_name\_prefix) | The name prefix for all your resources | `string` | `"zsac"` | no |
 | <a name="input_project"></a> [project](#input\_project) | Google Cloud project name | `string` | n/a | yes |
