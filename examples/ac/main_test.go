@@ -2,6 +2,7 @@ package ac
 
 import (
 	"log"
+	"os"
 	"testing"
 
 	"github.com/gruntwork-io/terratest/modules/logger"
@@ -15,12 +16,18 @@ func CreateTerraformOptions(t *testing.T) *terraform.Options {
 		log.Fatalf("Error generating terraform vars info: %v", err)
 	}
 
+	region := os.Getenv("REGION")
+	if region == "" {
+		region = "us-central1"
+	}
+
 	return terraform.WithDefaultRetryableErrors(t, &terraform.Options{
 		TerraformDir: ".",
 		VarFiles:     []string{"terraform.tfvars"},
 		Vars: map[string]interface{}{
 			"name_prefix": varsInfo.NamePrefix,
 			"project":     varsInfo.GoogleProjectId,
+			"region":      region,
 		},
 		Logger:               logger.Default,
 		Lock:                 true,
