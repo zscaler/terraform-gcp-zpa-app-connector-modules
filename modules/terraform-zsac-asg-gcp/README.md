@@ -38,7 +38,7 @@ To keep the surface tight and aligned with the AWS module, this module deliberat
 ## Requirements
 
 | Name | Version |
-|------|---------|
+| ---- | ------- |
 | <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) | >= 0.13.7, < 2.0.0 |
 | <a name="requirement_google"></a> [google](#requirement\_google) | ~> 7.31.0 |
 | <a name="requirement_time"></a> [time](#requirement\_time) | ~> 0.12.0 |
@@ -46,7 +46,7 @@ To keep the surface tight and aligned with the AWS module, this module deliberat
 ## Providers
 
 | Name | Version |
-|------|---------|
+| ---- | ------- |
 | <a name="provider_google"></a> [google](#provider\_google) | ~> 7.31.0 |
 | <a name="provider_time"></a> [time](#provider\_time) | ~> 0.12.0 |
 
@@ -57,7 +57,7 @@ No modules.
 ## Resources
 
 | Name | Type |
-|------|------|
+| ---- | ---- |
 | [google_compute_autoscaler.ac_asg](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/compute_autoscaler) | resource |
 | [google_compute_health_check.ac_asg_health_check](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/compute_health_check) | resource |
 | [google_compute_instance_group_manager.ac_instance_group_manager](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/compute_instance_group_manager) | resource |
@@ -68,7 +68,7 @@ No modules.
 ## Inputs
 
 | Name | Description | Type | Default | Required |
-|------|-------------|------|---------|:--------:|
+| ---- | ----------- | ---- | ------- | :------: |
 | <a name="input_acvm_instance_type"></a> [acvm\_instance\_type](#input\_acvm\_instance\_type) | App Connector Instance Type | `string` | `"n2-standard-4"` | no |
 | <a name="input_acvm_vpc_subnetwork"></a> [acvm\_vpc\_subnetwork](#input\_acvm\_vpc\_subnetwork) | VPC subnetwork the App Connector instances are launched in | `string` | n/a | yes |
 | <a name="input_cooldown_period"></a> [cooldown\_period](#input\_cooldown\_period) | The number of seconds the autoscaler waits before it starts collecting information from a new instance. Prevents the autoscaler from acting on usage data while the instance is still initializing. | `number` | `60` | no |
@@ -94,7 +94,7 @@ No modules.
 ## Outputs
 
 | Name | Description |
-|------|-------------|
+| ---- | ----------- |
 | <a name="output_autoscaler_ids"></a> [autoscaler\_ids](#output\_autoscaler\_ids) | self\_link IDs of the per-zone Compute Autoscalers |
 | <a name="output_autoscaler_names"></a> [autoscaler\_names](#output\_autoscaler\_names) | Names of the per-zone Compute Autoscalers |
 | <a name="output_instance_group_ids"></a> [instance\_group\_ids](#output\_instance\_group\_ids) | self\_link IDs of the per-zone Managed Instance Groups |

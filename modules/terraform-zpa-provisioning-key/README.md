@@ -8,14 +8,14 @@ There is a "BYO" option where you can conditionally create new or reference an e
 ## Requirements
 
 | Name | Version |
-|------|---------|
+| ---- | ------- |
 | <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) | >= 0.13.7, < 2.0.0 |
 | <a name="requirement_zpa"></a> [zpa](#requirement\_zpa) | ~> 4.4.0 |
 
 ## Providers
 
 | Name | Version |
-|------|---------|
+| ---- | ------- |
 | <a name="provider_zpa"></a> [zpa](#provider\_zpa) | ~> 4.4.0 |
 
 ## Modules
@@ -25,7 +25,7 @@ No modules.
 ## Resources
 
 | Name | Type |
-|------|------|
+| ---- | ---- |
 | [zpa_provisioning_key.provisioning_key](https://registry.terraform.io/providers/zscaler/zpa/latest/docs/resources/provisioning_key) | resource |
 | [zpa_enrollment_cert.connector](https://registry.terraform.io/providers/zscaler/zpa/latest/docs/data-sources/enrollment_cert) | data source |
 | [zpa_provisioning_key.provisioning_key_selected](https://registry.terraform.io/providers/zscaler/zpa/latest/docs/data-sources/provisioning_key) | data source |
@@ -33,7 +33,7 @@ No modules.
 ## Inputs
 
 | Name | Description | Type | Default | Required |
-|------|-------------|------|---------|:--------:|
+| ---- | ----------- | ---- | ------- | :------: |
 | <a name="input_app_connector_group_id"></a> [app\_connector\_group\_id](#input\_app\_connector\_group\_id) | ID of the ZPA App Connector Group that the provisioning key will be bound to (zcomponent\_id). Typically wired from the terraform-zpa-app-connector-group module output. | `string` | n/a | yes |
 | <a name="input_byo_provisioning_key"></a> [byo\_provisioning\_key](#input\_byo\_provisioning\_key) | Bring your own App Connector Provisioning Key. Setting this variable to true will effectively instruct this module to not create any resources and only reference data resources from values provided in byo\_provisioning\_key\_name | `bool` | `false` | no |
 | <a name="input_byo_provisioning_key_name"></a> [byo\_provisioning\_key\_name](#input\_byo\_provisioning\_key\_name) | Existing App Connector Provisioning Key name | `string` | `null` | no |
@@ -45,6 +45,6 @@ No modules.
 ## Outputs
 
 | Name | Description |
-|------|-------------|
+| ---- | ----------- |
 | <a name="output_provisioning_key"></a> [provisioning\_key](#output\_provisioning\_key) | ZPA Provisioning Key Output |
 <!-- END OF PRE-COMMIT-TERRAFORM DOCS HOOK -->
