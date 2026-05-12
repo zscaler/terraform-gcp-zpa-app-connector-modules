@@ -31,11 +31,23 @@ runs:
       with:
         go-version: "1.25"
 
-    - name: login to GCP
+    # GCP auth. Two modes supported, picked at runtime by what the caller sets:
+    #   1. Service Account JSON key: set GCP_CREDENTIALS_JSON in repo secrets.
+    #   2. Workload Identity Federation: set both WORKLOAD_IDENTITY_PROVIDER and
+    #      GCP_SERVICE_ACCOUNT in repo secrets (and leave GCP_CREDENTIALS_JSON empty).
+    # SA key is the simpler day-1 setup; WIF is the more secure long-term option.
+    - name: login to GCP (service account key)
+      if: env.GCP_CREDENTIALS_JSON != ''
+      uses: google-github-actions/auth@3a3c4c57d294ef65efaaee4ff17b22fa88dd3c69 #v1
+      with:
+        credentials_json: ${{ env.GCP_CREDENTIALS_JSON }}
+
+    - name: login to GCP (workload identity federation)
+      if: env.GCP_CREDENTIALS_JSON == '' && env.WORKLOAD_IDENTITY_PROVIDER != ''
       uses: google-github-actions/auth@3a3c4c57d294ef65efaaee4ff17b22fa88dd3c69 #v1
       with:
         workload_identity_provider: ${{ env.WORKLOAD_IDENTITY_PROVIDER }}
-        service_account: ${{ env.GCP_SERVICE_ACCOUNT}}
+        service_account: ${{ env.GCP_SERVICE_ACCOUNT }}
 
     - name: ${{ inputs.terratest_action }} infrastructure
       env:

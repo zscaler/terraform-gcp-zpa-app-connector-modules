@@ -10,7 +10,14 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - name: login to GCP
+    - name: login to GCP (service account key)
+      if: env.GCP_CREDENTIALS_JSON != ''
+      uses: google-github-actions/auth@3a3c4c57d294ef65efaaee4ff17b22fa88dd3c69 #v1
+      with:
+        credentials_json: ${{ env.GCP_CREDENTIALS_JSON }}
+
+    - name: login to GCP (workload identity federation)
+      if: env.GCP_CREDENTIALS_JSON == '' && env.WORKLOAD_IDENTITY_PROVIDER != ''
       uses: google-github-actions/auth@3a3c4c57d294ef65efaaee4ff17b22fa88dd3c69 #v1
       with:
         workload_identity_provider: ${{ env.WORKLOAD_IDENTITY_PROVIDER }}
