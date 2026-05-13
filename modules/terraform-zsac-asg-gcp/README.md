@@ -38,7 +38,7 @@ To keep the surface tight and aligned with the AWS module, this module deliberat
 ## Requirements
 
 | Name | Version |
-| ---- | ------- |
+|------|---------|
 | <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) | >= 0.13.7, < 2.0.0 |
 | <a name="requirement_google"></a> [google](#requirement\_google) | ~> 7.31.0 |
 | <a name="requirement_time"></a> [time](#requirement\_time) | ~> 0.12.0 |
@@ -46,7 +46,7 @@ To keep the surface tight and aligned with the AWS module, this module deliberat
 ## Providers
 
 | Name | Version |
-| ---- | ------- |
+|------|---------|
 | <a name="provider_google"></a> [google](#provider\_google) | ~> 7.31.0 |
 | <a name="provider_time"></a> [time](#provider\_time) | ~> 0.12.0 |
 
@@ -57,7 +57,7 @@ No modules.
 ## Resources
 
 | Name | Type |
-| ---- | ---- |
+|------|------|
 | [google_compute_autoscaler.ac_asg](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/compute_autoscaler) | resource |
 | [google_compute_health_check.ac_asg_health_check](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/compute_health_check) | resource |
 | [google_compute_instance_group_manager.ac_instance_group_manager](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/compute_instance_group_manager) | resource |
@@ -68,7 +68,7 @@ No modules.
 ## Inputs
 
 | Name | Description | Type | Default | Required |
-| ---- | ----------- | ---- | ------- | :------: |
+|------|-------------|------|---------|:--------:|
 | <a name="input_acvm_instance_type"></a> [acvm\_instance\_type](#input\_acvm\_instance\_type) | App Connector Instance Type | `string` | `"n2-standard-4"` | no |
 | <a name="input_acvm_vpc_subnetwork"></a> [acvm\_vpc\_subnetwork](#input\_acvm\_vpc\_subnetwork) | VPC subnetwork the App Connector instances are launched in | `string` | n/a | yes |
 | <a name="input_cooldown_period"></a> [cooldown\_period](#input\_cooldown\_period) | The number of seconds the autoscaler waits before it starts collecting information from a new instance. Prevents the autoscaler from acting on usage data while the instance is still initializing. | `number` | `60` | no |
@@ -81,6 +81,7 @@ No modules.
 | <a name="input_project"></a> [project](#input\_project) | Google Cloud project name | `string` | n/a | yes |
 | <a name="input_region"></a> [region](#input\_region) | Google Cloud region | `string` | n/a | yes |
 | <a name="input_resource_tag"></a> [resource\_tag](#input\_resource\_tag) | A tag to associate to all the App Connector ASG module resources | `string` | `null` | no |
+| <a name="input_service_account_email"></a> [service\_account\_email](#input\_service\_account\_email) | Email of the service account to attach to the App Connector VMs. Required for OAuth user-code onboarding (the VM PUTs its enrollment code to the GCE metadata server's guest-attributes endpoint, which is authenticated as this SA against the Compute API). Leave null to use the project's default Compute Engine service account; otherwise pass an SA email that has roles/compute.instanceAdmin.v1 (or the more granular compute.instances.setGuestAttributes permission) on the project. | `string` | `null` | no |
 | <a name="input_ssh_key"></a> [ssh\_key](#input\_ssh\_key) | A public key uploaded to the App Connector instances | `string` | n/a | yes |
 | <a name="input_target_cpu_util_value"></a> [target\_cpu\_util\_value](#input\_target\_cpu\_util\_value) | Target value for the autoscaling policy. For ASGAverageCPUUtilization this is interpreted as a CPU utilization percentage (1-100, divided by 100 internally because GCP wants a 0.0-1.0 fraction). For ASGAverageNetworkIn/Out this is interpreted as bytes-per-second per instance. | `number` | `50` | no |
 | <a name="input_target_tracking_metric"></a> [target\_tracking\_metric](#input\_target\_tracking\_metric) | Target tracking metric for the autoscaling policy. Names mirror AWS predefined metric types so callers can switch clouds without renaming. App Connector recommends ASGAverageCPUUtilization. | `string` | `"ASGAverageCPUUtilization"` | no |
@@ -94,7 +95,7 @@ No modules.
 ## Outputs
 
 | Name | Description |
-| ---- | ----------- |
+|------|-------------|
 | <a name="output_autoscaler_ids"></a> [autoscaler\_ids](#output\_autoscaler\_ids) | self\_link IDs of the per-zone Compute Autoscalers |
 | <a name="output_autoscaler_names"></a> [autoscaler\_names](#output\_autoscaler\_names) | Names of the per-zone Compute Autoscalers |
 | <a name="output_instance_group_ids"></a> [instance\_group\_ids](#output\_instance\_group\_ids) | self\_link IDs of the per-zone Managed Instance Groups |
@@ -102,5 +103,7 @@ No modules.
 | <a name="output_instance_group_zones"></a> [instance\_group\_zones](#output\_instance\_group\_zones) | GCP zone assignments for the per-zone Managed Instance Groups |
 | <a name="output_instance_template_project"></a> [instance\_template\_project](#output\_instance\_template\_project) | GCP project for the App Connector instance template |
 | <a name="output_instance_template_region"></a> [instance\_template\_region](#output\_instance\_template\_region) | GCP region for the App Connector instance template |
+| <a name="output_running_instance_names"></a> [running\_instance\_names](#output\_running\_instance\_names) | Names of every VM currently registered across all MIGs (parallel list to running\_instance\_zones). Pass to the user-code resolver as instance\_names. |
+| <a name="output_running_instance_zones"></a> [running\_instance\_zones](#output\_running\_instance\_zones) | Zones for every VM currently registered across all MIGs (parallel list to running\_instance\_names). Pass to the user-code resolver as instance\_zones. |
 | <a name="output_running_instances"></a> [running\_instances](#output\_running\_instances) | Per-zone list of VM instance self\_links currently registered to each MIG (queried 60s after MIG creation to give instances time to come up). Useful for debugging and for terratest assertions that count live instances. |
 <!-- END OF PRE-COMMIT-TERRAFORM DOCS HOOK -->

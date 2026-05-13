@@ -498,15 +498,33 @@ if [[ -z "${ZSAC_GCP_AUTH:-}" || -z "${ZSAC_AUTH_MODE:-}" ]]; then
     collect_zpa_creds
 
     # ----------------------------------------------------------------------- #
-    # Bring-your-own provisioning key                                         #
+    # Onboarding method                                                       #
+    #                                                                         #
+    # OAuth user-codes is the default and recommended method. Each App        #
+    # Connector VM publishes its /etc/issue enrollment code as a guest        #
+    # attribute on first boot; Terraform reads them back and passes them to   #
+    # the App Connector Group's user_codes attribute, which the ZPA provider  #
+    # verifies. The legacy provisioning-key flow is kept for tenants that     #
+    # have not yet been migrated to OAuth on the ZPA side.                    #
     # ----------------------------------------------------------------------- #
-    if confirm "Do you already have an App Connector provisioning key to use?" default-no; then
-        byo_provisioning_key_name=$(ask "Existing App Connector provisioning key name")
-        printf 'export TF_VAR_byo_provisioning_key=true\n' >> .zsacrc
-        printf 'export TF_VAR_byo_provisioning_key_name=%q\n' "$byo_provisioning_key_name" >> .zsacrc
+    if confirm "Use OAuth user-code onboarding (recommended)?" default-yes; then
+        info "OAuth selected. No provisioning key needed — codes will be"
+        info "fetched from the booted VMs at apply time."
+        printf 'export TF_VAR_use_user_code_method=true\n' >> .zsacrc
     else
-        info "Terraform will create a new App Connector group + provisioning key."
-        info "Make sure variables in $dtype/terraform.tfvars are populated."
+        printf 'export TF_VAR_use_user_code_method=false\n' >> .zsacrc
+
+        # Provisioning-key flow only — ask BYO. We deliberately do NOT ask
+        # this in the OAuth path, since the provisioning_key module isn't
+        # instantiated there.
+        if confirm "Do you already have an App Connector provisioning key to use?" default-no; then
+            byo_provisioning_key_name=$(ask "Existing App Connector provisioning key name")
+            printf 'export TF_VAR_byo_provisioning_key=true\n' >> .zsacrc
+            printf 'export TF_VAR_byo_provisioning_key_name=%q\n' "$byo_provisioning_key_name" >> .zsacrc
+        else
+            info "Terraform will create a new App Connector group + provisioning key."
+            info "Make sure variables in $dtype/terraform.tfvars are populated."
+        fi
     fi
 
     # ----------------------------------------------------------------------- #

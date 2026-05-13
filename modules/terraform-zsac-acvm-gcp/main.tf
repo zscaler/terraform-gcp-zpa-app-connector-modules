@@ -32,6 +32,19 @@ resource "google_compute_instance_template" "ac_instance_template" {
 
   metadata_startup_script = var.user_data
 
+  # OAuth user-code onboarding requires the VM to PUT its enrollment code to
+  # the metadata server's guest-attributes endpoint. That call is authenticated
+  # against the Compute API as the VM's service account, and GCE clamps what
+  # the metadata token can do by the scopes set here — IAM roles alone are
+  # not enough. `cloud-platform` is the only scope that authorises
+  # `compute.instances.setGuestAttributes`. When `service_account_email` is
+  # not provided we fall back to the project's default Compute SA, which is
+  # the same SA GCE would have assigned implicitly.
+  service_account {
+    email  = var.service_account_email
+    scopes = ["cloud-platform"]
+  }
+
   lifecycle {
     create_before_destroy = true
   }

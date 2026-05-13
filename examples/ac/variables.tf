@@ -107,6 +107,12 @@ variable "use_zscaler_image" {
   description = "By default, App Connector will deploy via the Zscaler Latest Image. Setting this to false will deploy the latest Red Hat Enterprise Linux 9 Image instead"
 }
 
+variable "use_user_code_method" {
+  type        = bool
+  description = "OAuth2 user-code onboarding (default). Each App Connector VM publishes its /etc/issue enrollment code as a guest attribute on first boot; Terraform reads them back and passes them to the App Connector Group's user_codes attribute, which the ZPA provider verifies. Set to false to fall back to the legacy provisioning-key flow (one shared key, baked into the VM startup script)."
+  default     = true
+}
+
 # ZPA Provider specific variables for App Connector Group and Provisioning Key creation
 variable "byo_provisioning_key" {
   type        = bool

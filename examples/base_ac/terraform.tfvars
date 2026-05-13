@@ -54,6 +54,7 @@
 
 #byo_provisioning_key_name                      = "example-key-name"
 
+# use_user_code_method = false
 
 #####################################################################################################################
 ##### Terraform/Cloud Environment variables  #####

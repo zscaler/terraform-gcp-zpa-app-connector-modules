@@ -32,3 +32,13 @@ output "ac_instance" {
   description = "App Connector VM name"
   value       = data.google_compute_instance.ac_vm_instances[*].self_link
 }
+
+output "ac_instance_names" {
+  description = "App Connector VM instance names. Useful for the OAuth user-code resolver, which needs to address each VM by name + zone."
+  value       = data.google_compute_instance.ac_vm_instances[*].name
+}
+
+output "ac_instance_zones" {
+  description = "App Connector VM instance zones (parallel to ac_instance_names)."
+  value       = data.google_compute_instance.ac_vm_instances[*].zone
+}

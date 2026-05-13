@@ -14,7 +14,7 @@ Zscaler recommends deploying App Connectors via consistent/reusable templates wi
 ## Requirements
 
 | Name | Version |
-| ---- | ------- |
+|------|---------|
 | <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) | >= 0.13.7, < 2.0.0 |
 | <a name="requirement_google"></a> [google](#requirement\_google) | ~> 7.31.0 |
 | <a name="requirement_local"></a> [local](#requirement\_local) | ~> 2.8.0 |
@@ -23,7 +23,7 @@ Zscaler recommends deploying App Connectors via consistent/reusable templates wi
 ## Providers
 
 | Name | Version |
-| ---- | ------- |
+|------|---------|
 | <a name="provider_google"></a> [google](#provider\_google) | ~> 7.31.0 |
 | <a name="provider_time"></a> [time](#provider\_time) | ~> 0.12.0 |
 
@@ -34,7 +34,7 @@ No modules.
 ## Resources
 
 | Name | Type |
-| ---- | ---- |
+|------|------|
 | [google_compute_instance_group_manager.ac_instance_group_manager](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/compute_instance_group_manager) | resource |
 | [google_compute_instance_template.ac_instance_template](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/compute_instance_template) | resource |
 | [time_sleep.wait_60_seconds](https://registry.terraform.io/providers/hashicorp/time/latest/docs/resources/sleep) | resource |
@@ -44,7 +44,7 @@ No modules.
 ## Inputs
 
 | Name | Description | Type | Default | Required |
-| ---- | ----------- | ---- | ------- | :------: |
+|------|-------------|------|---------|:--------:|
 | <a name="input_ac_count"></a> [ac\_count](#input\_ac\_count) | Default number of App Connector appliances to create | `number` | `1` | no |
 | <a name="input_acvm_instance_type"></a> [acvm\_instance\_type](#input\_acvm\_instance\_type) | App Connector Instance Type | `string` | `"n2-standard-4"` | no |
 | <a name="input_acvm_vpc_subnetwork"></a> [acvm\_vpc\_subnetwork](#input\_acvm\_vpc\_subnetwork) | VPC subnetwork for AC VM MGMT | `string` | n/a | yes |
@@ -54,6 +54,7 @@ No modules.
 | <a name="input_project"></a> [project](#input\_project) | Google Cloud project name | `string` | n/a | yes |
 | <a name="input_region"></a> [region](#input\_region) | Google Cloud region | `string` | n/a | yes |
 | <a name="input_resource_tag"></a> [resource\_tag](#input\_resource\_tag) | A tag to associate to all the App Connector module resources | `string` | `null` | no |
+| <a name="input_service_account_email"></a> [service\_account\_email](#input\_service\_account\_email) | Email of the service account to attach to the App Connector VMs. Required for OAuth user-code onboarding (the VM PUTs its enrollment code to the GCE metadata server's guest-attributes endpoint, which is authenticated as this SA against the Compute API). Leave null to use the project's default Compute Engine service account; otherwise pass an SA email that has roles/compute.instanceAdmin.v1 (or the more granular compute.instances.setGuestAttributes permission) on the project. | `string` | `null` | no |
 | <a name="input_ssh_key"></a> [ssh\_key](#input\_ssh\_key) | A public key uploaded to the App Connector instances | `string` | n/a | yes |
 | <a name="input_update_max_unavailable_fixed"></a> [update\_max\_unavailable\_fixed](#input\_update\_max\_unavailable\_fixed) | The maximum number of instances that can be unavailable during the update process. Conflicts with max\_unavailable\_percent. If neither is set, defaults to 1 | `number` | `1` | no |
 | <a name="input_update_policy_max_surge_fixed"></a> [update\_policy\_max\_surge\_fixed](#input\_update\_policy\_max\_surge\_fixed) | The maximum number of instances that can be created above the specified targetSize during the update process. Conflicts with max\_surge\_percent. If neither is set, defaults to 1 | `number` | `1` | no |
@@ -65,8 +66,10 @@ No modules.
 ## Outputs
 
 | Name | Description |
-| ---- | ----------- |
+|------|-------------|
 | <a name="output_ac_instance"></a> [ac\_instance](#output\_ac\_instance) | App Connector VM name |
+| <a name="output_ac_instance_names"></a> [ac\_instance\_names](#output\_ac\_instance\_names) | App Connector VM instance names. Useful for the OAuth user-code resolver, which needs to address each VM by name + zone. |
+| <a name="output_ac_instance_zones"></a> [ac\_instance\_zones](#output\_ac\_instance\_zones) | App Connector VM instance zones (parallel to ac\_instance\_names). |
 | <a name="output_ac_private_ip"></a> [ac\_private\_ip](#output\_ac\_private\_ip) | App Connector VM internal forwarding IP |
 | <a name="output_instance_group_ids"></a> [instance\_group\_ids](#output\_instance\_group\_ids) | Name for Instance Groups |
 | <a name="output_instance_group_names"></a> [instance\_group\_names](#output\_instance\_group\_names) | Name for Instance Groups |

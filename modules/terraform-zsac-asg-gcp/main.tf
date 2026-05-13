@@ -33,6 +33,14 @@ resource "google_compute_instance_template" "ac_instance_template" {
 
   metadata_startup_script = var.user_data
 
+  # See terraform-zsac-acvm-gcp/main.tf for the rationale: OAuth user-code
+  # onboarding requires the cloud-platform scope so the VM can PUT its
+  # enrollment code to the metadata server's guest-attributes endpoint.
+  service_account {
+    email  = var.service_account_email
+    scopes = ["cloud-platform"]
+  }
+
   lifecycle {
     create_before_destroy = true
   }

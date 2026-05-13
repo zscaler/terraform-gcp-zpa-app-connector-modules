@@ -38,7 +38,7 @@ From base_ac directory execute:
 ## Requirements
 
 | Name | Version |
-| ---- | ------- |
+|------|---------|
 | <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) | >= 0.13.7, < 2.0.0 |
 | <a name="requirement_google"></a> [google](#requirement\_google) | ~> 7.31.0 |
 | <a name="requirement_local"></a> [local](#requirement\_local) | ~> 2.8.0 |
@@ -50,7 +50,7 @@ From base_ac directory execute:
 ## Providers
 
 | Name | Version |
-| ---- | ------- |
+|------|---------|
 | <a name="provider_google"></a> [google](#provider\_google) | ~> 7.31.0 |
 | <a name="provider_local"></a> [local](#provider\_local) | ~> 2.8.0 |
 | <a name="provider_random"></a> [random](#provider\_random) | ~> 3.8.0 |
@@ -59,19 +59,22 @@ From base_ac directory execute:
 ## Modules
 
 | Name | Source | Version |
-| ---- | ------ | ------- |
+|------|--------|---------|
 | <a name="module_ac_vm"></a> [ac\_vm](#module\_ac\_vm) | ../../modules/terraform-zsac-acvm-gcp | n/a |
 | <a name="module_bastion"></a> [bastion](#module\_bastion) | ../../modules/terraform-zsac-bastion-gcp | n/a |
 | <a name="module_network"></a> [network](#module\_network) | ../../modules/terraform-zsac-network-gcp | n/a |
-| <a name="module_zpa_app_connector_group"></a> [zpa\_app\_connector\_group](#module\_zpa\_app\_connector\_group) | ../../modules/terraform-zpa-app-connector-group | n/a |
+| <a name="module_user_code_publisher"></a> [user\_code\_publisher](#module\_user\_code\_publisher) | ../../modules/terraform-zpa-user-code-publisher | n/a |
+| <a name="module_user_code_reader"></a> [user\_code\_reader](#module\_user\_code\_reader) | ../../modules/terraform-zpa-user-code-reader | n/a |
+| <a name="module_zpa_app_connector_group_legacy"></a> [zpa\_app\_connector\_group\_legacy](#module\_zpa\_app\_connector\_group\_legacy) | ../../modules/terraform-zpa-app-connector-group | n/a |
+| <a name="module_zpa_app_connector_group_oauth"></a> [zpa\_app\_connector\_group\_oauth](#module\_zpa\_app\_connector\_group\_oauth) | ../../modules/terraform-zpa-app-connector-group | n/a |
 | <a name="module_zpa_provisioning_key"></a> [zpa\_provisioning\_key](#module\_zpa\_provisioning\_key) | ../../modules/terraform-zpa-provisioning-key | n/a |
 
 ## Resources
 
 | Name | Type |
-| ---- | ---- |
+|------|------|
+| [google_service_account.ac_vm](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/service_account) | resource |
 | [local_file.private_key](https://registry.terraform.io/providers/hashicorp/local/latest/docs/resources/file) | resource |
-| [local_file.rhel9_user_data_file](https://registry.terraform.io/providers/hashicorp/local/latest/docs/resources/file) | resource |
 | [local_file.testbed](https://registry.terraform.io/providers/hashicorp/local/latest/docs/resources/file) | resource |
 | [local_file.user_data_file](https://registry.terraform.io/providers/hashicorp/local/latest/docs/resources/file) | resource |
 | [random_string.suffix](https://registry.terraform.io/providers/hashicorp/random/latest/docs/resources/string) | resource |
@@ -83,7 +86,7 @@ From base_ac directory execute:
 ## Inputs
 
 | Name | Description | Type | Default | Required |
-| ---- | ----------- | ---- | ------- | :------: |
+|------|-------------|------|---------|:--------:|
 | <a name="input_ac_count"></a> [ac\_count](#input\_ac\_count) | Default number of App Connector appliances to create per Instance Group/Availability Zone | `number` | `1` | no |
 | <a name="input_acvm_instance_type"></a> [acvm\_instance\_type](#input\_acvm\_instance\_type) | App Connector Instance Type | `string` | `"n2-standard-4"` | no |
 | <a name="input_allowed_ports"></a> [allowed\_ports](#input\_allowed\_ports) | A list of ports to permit inbound to App Connector Service VPC. Default empty list means to allow all. | `list(string)` | `[]` | no |
@@ -112,12 +115,13 @@ From base_ac directory execute:
 | <a name="input_subnet_ac"></a> [subnet\_ac](#input\_subnet\_ac) | A subnet IP CIDR for the App Connector VPC | `string` | `"10.0.1.0/24"` | no |
 | <a name="input_subnet_bastion"></a> [subnet\_bastion](#input\_subnet\_bastion) | A subnet IP CIDR for the greenfield/test bastion host in the Management VPC | `string` | `"10.0.0.0/24"` | no |
 | <a name="input_tls_key_algorithm"></a> [tls\_key\_algorithm](#input\_tls\_key\_algorithm) | algorithm for tls\_private\_key resource | `string` | `"RSA"` | no |
+| <a name="input_use_user_code_method"></a> [use\_user\_code\_method](#input\_use\_user\_code\_method) | OAuth2 user-code onboarding (default). Each App Connector VM publishes its /etc/issue enrollment code as a guest attribute on first boot; Terraform reads them back and passes them to the App Connector Group's user\_codes attribute, which the ZPA provider verifies. Set to false to fall back to the legacy provisioning-key flow (one shared key, baked into the VM startup script). | `bool` | `true` | no |
 | <a name="input_use_zscaler_image"></a> [use\_zscaler\_image](#input\_use\_zscaler\_image) | By default, App Connector will deploy via the Zscaler Latest Image. Setting this to false will deploy the latest Red Hat Enterprise Linux 9 Image instead | `bool` | `true` | no |
 | <a name="input_zones"></a> [zones](#input\_zones) | (Optional) Availability zone names. Only required if automatic zones selection based on az\_count is undesirable | `list(string)` | `[]` | no |
 
 ## Outputs
 
 | Name | Description |
-| ---- | ----------- |
+|------|-------------|
 | <a name="output_testbedconfig"></a> [testbedconfig](#output\_testbedconfig) | Google Cloud Testbed results |
 <!-- END OF PRE-COMMIT-TERRAFORM DOCS HOOK -->

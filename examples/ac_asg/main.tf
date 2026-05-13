@@ -27,8 +27,20 @@ resource "local_file" "private_key" {
 
 
 ################################################################################
-# 1. Create/reference all network infrastructure resource dependencies for all
-#    child modules. Brownfield: BYO VPC / subnet / router / NAT supported.
+# CYCLE-BREAKING NOTE FOR THIS FILE
+#
+# See examples/ac/main.tf for the full explanation. tl;dr:
+#   - connector_group is split into _oauth and _legacy, each count-gated.
+#   - provisioning_key references group_legacy[*] via splat (only live in legacy).
+#   - legacy user_data references provisioning_key[*] via splat (only live in legacy).
+#   - resolver references ac_asg (only live in OAuth).
+# Result: each mode has a clean DAG with no cycle.
+################################################################################
+
+
+################################################################################
+# 1. Create/reference all network infrastructure. Brownfield: BYO VPC / subnet
+#    / router / NAT supported.
 ################################################################################
 module "network" {
   source                         = "../../modules/terraform-zsac-network-gcp"
@@ -55,52 +67,63 @@ module "network" {
 
 
 ################################################################################
-# 2. Create ZPA App Connector Group
-#
-# The "Connector" enrollment certificate is looked up internally by this module.
+# 2. (OAuth path) Provision a service account for App Connector ASG VMs and
+#    instantiate the user-code module. See examples/base_ac_asg for the
+#    rationale on vm_count = min_size * length(zones).
 ################################################################################
-module "zpa_app_connector_group" {
-  count                                        = var.byo_provisioning_key == true ? 0 : 1
-  source                                       = "../../modules/terraform-zpa-app-connector-group"
-  app_connector_group_name                     = "${var.region}-${module.network.vpc_network_name}"
-  app_connector_group_description              = "${var.app_connector_group_description}-${var.region}-${module.network.vpc_network_name}"
-  app_connector_group_enabled                  = var.app_connector_group_enabled
-  app_connector_group_country_code             = var.app_connector_group_country_code
-  app_connector_group_latitude                 = var.app_connector_group_latitude
-  app_connector_group_longitude                = var.app_connector_group_longitude
-  app_connector_group_location                 = var.app_connector_group_location
-  app_connector_group_upgrade_day              = var.app_connector_group_upgrade_day
-  app_connector_group_upgrade_time_in_secs     = var.app_connector_group_upgrade_time_in_secs
-  app_connector_group_override_version_profile = var.app_connector_group_override_version_profile
-  app_connector_group_dns_query_type           = var.app_connector_group_dns_query_type
+resource "google_service_account" "ac_vm" {
+  count        = var.use_user_code_method ? 1 : 0
+  project      = var.project
+  account_id   = "${var.name_prefix}-acvm-${random_string.suffix.result}"
+  display_name = "ZPA App Connector VM SA (${var.name_prefix}-${random_string.suffix.result})"
+  description  = "Used by App Connector ASG VMs to publish OAuth enrollment codes to Secret Manager."
+}
+
+module "user_code_publisher" {
+  count                 = var.use_user_code_method ? 1 : 0
+  source                = "../../modules/terraform-zpa-user-code-publisher"
+  name_prefix           = var.name_prefix
+  resource_tag          = random_string.suffix.result
+  project               = var.project
+  vm_count              = var.min_size * length(local.zones_list)
+  service_account_email = google_service_account.ac_vm[0].email
 }
 
 
 ################################################################################
-# 3. Create ZPA Provisioning Key (or reference existing if byo set)
+# 3. Create ZPA Provisioning Key (legacy path only).
 ################################################################################
 module "zpa_provisioning_key" {
+  count                             = var.use_user_code_method ? 0 : 1
   source                            = "../../modules/terraform-zpa-provisioning-key"
   provisioning_key_name             = "${var.region}-${module.network.vpc_network_name}"
   provisioning_key_enabled          = var.provisioning_key_enabled
   provisioning_key_association_type = var.provisioning_key_association_type
   provisioning_key_max_usage        = var.provisioning_key_max_usage
-  app_connector_group_id            = try(module.zpa_app_connector_group[0].app_connector_group_id, "")
+  app_connector_group_id            = one(module.zpa_app_connector_group_legacy[*].app_connector_group_id)
   byo_provisioning_key              = var.byo_provisioning_key
   byo_provisioning_key_name         = var.byo_provisioning_key_name
 }
 
 
 ################################################################################
-# A. Zscaler-image bootstrap user_data
+# 4. Render user_data. Two distinct flows depending on use_user_code_method.
 ################################################################################
 locals {
-  appuserdata = <<APPUSERDATA
+  oauth_user_data = coalesce(one(module.user_code_publisher[*].user_data), "OAUTH_USER_DATA_NOT_SET")
+
+  # See examples/ac/main.tf for the rationale on this coalesce. In OAuth mode
+  # pk has count=0 and the splat is empty; the placeholder string is never
+  # actually delivered to a VM because effective_user_data picks the OAuth
+  # path.
+  pk_value = coalesce(one(module.zpa_provisioning_key[*].provisioning_key), "PROVISIONING_KEY_NOT_SET")
+
+  provkey_user_data_zscaler_image = <<APPUSERDATA
 #!/bin/bash
 #Stop the App Connector service which was auto-started at boot time
 systemctl stop zpa-connector
 #Create a file from the App Connector provisioning key created in the ZPA Admin Portal
-echo "${module.zpa_provisioning_key.provisioning_key}" > /opt/zscaler/var/provision_key
+echo "${local.pk_value}" > /opt/zscaler/var/provision_key
 
 #Run a yum update to apply the latest patches
 yum update -y
@@ -115,20 +138,8 @@ sleep 60
 systemctl stop zpa-connector
 systemctl start zpa-connector
 APPUSERDATA
-}
 
-resource "local_file" "user_data_file" {
-  count    = var.use_zscaler_image == true ? 1 : 0
-  content  = local.appuserdata
-  filename = "./user_data"
-}
-
-
-################################################################################
-# B. RHEL9 bootstrap user_data
-################################################################################
-locals {
-  rhel9userdata = <<RHEL9USERDATA
+  provkey_user_data_rhel9 = <<RHEL9USERDATA
 #!/usr/bin/bash
 sleep 15
 
@@ -145,37 +156,37 @@ EOT
 sleep 60
 
 yum install -y zpa-connector
-
 systemctl stop zpa-connector
 
-echo "${module.zpa_provisioning_key.provisioning_key}" > /opt/zscaler/var/provision_key
+echo "${local.pk_value}" > /opt/zscaler/var/provision_key
 chmod 644 /opt/zscaler/var/provision_key
 
 yum update -y
 
 systemctl start zpa-connector
-
 sleep 60
-
 systemctl stop zpa-connector
 systemctl start zpa-connector
 RHEL9USERDATA
+
+  provkey_user_data = var.use_zscaler_image ? local.provkey_user_data_zscaler_image : local.provkey_user_data_rhel9
+
+  effective_user_data = var.use_user_code_method ? local.oauth_user_data : local.provkey_user_data
 }
 
-resource "local_file" "rhel9_user_data_file" {
-  count    = var.use_zscaler_image == true ? 0 : 1
-  content  = local.rhel9userdata
+resource "local_file" "user_data_file" {
+  content  = local.effective_user_data
   filename = "./user_data"
 }
 
 
 ################################################################################
-# Locate Latest App Connector Image on Google Marketplace
+# 5. Locate the appropriate base image.
 ################################################################################
 data "google_compute_image" "appconnector" {
   count   = var.use_zscaler_image ? 1 : 0
   project = "mpi-zpa-gcp-marketplace"
-  name    = "zpa-connector-el9-2024-08"
+  name    = "zpa-connector-el9-2025-11"
 }
 
 data "google_compute_image" "rhel_9_latest" {
@@ -190,7 +201,7 @@ locals {
 
 
 ################################################################################
-# Query for active list of available zones for var.region
+# 6. Pick zones to deploy into.
 ################################################################################
 data "google_compute_zones" "available" {
   status = "UP"
@@ -202,21 +213,21 @@ locals {
 
 
 ################################################################################
-# 4. Create the App Connector autoscaling group(s).
-#    One MIG + one Autoscaler per zone in zones_list.
+# 7. Create the App Connector autoscaling group(s).
 ################################################################################
 module "ac_asg" {
-  source              = "../../modules/terraform-zsac-asg-gcp"
-  name_prefix         = var.name_prefix
-  resource_tag        = random_string.suffix.result
-  project             = var.project
-  region              = var.region
-  zones               = local.zones_list
-  acvm_instance_type  = var.acvm_instance_type
-  ssh_key             = tls_private_key.key.public_key_openssh
-  user_data           = var.use_zscaler_image == true ? local.appuserdata : local.rhel9userdata
-  acvm_vpc_subnetwork = module.network.ac_subnet
-  image_name          = var.image_name != "" ? var.image_name : local.image_selected
+  source                = "../../modules/terraform-zsac-asg-gcp"
+  name_prefix           = var.name_prefix
+  resource_tag          = random_string.suffix.result
+  project               = var.project
+  region                = var.region
+  zones                 = local.zones_list
+  acvm_instance_type    = var.acvm_instance_type
+  ssh_key               = tls_private_key.key.public_key_openssh
+  user_data             = local.effective_user_data
+  acvm_vpc_subnetwork   = module.network.ac_subnet
+  image_name            = var.image_name != "" ? var.image_name : local.image_selected
+  service_account_email = one(google_service_account.ac_vm[*].email)
 
   min_size                  = var.min_size
   max_size                  = var.max_size
@@ -224,4 +235,62 @@ module "ac_asg" {
   target_cpu_util_value     = var.target_cpu_util_value
   cooldown_period           = var.cooldown_period
   health_check_grace_period = var.health_check_grace_period
+}
+
+
+################################################################################
+# 8. (OAuth path) Read OAuth codes from Secret Manager once VMs publish.
+#    See base_ac_asg/main.tf for the ASG-vs-min_size caveat.
+################################################################################
+module "user_code_reader" {
+  count         = var.use_user_code_method ? 1 : 0
+  source        = "../../modules/terraform-zpa-user-code-reader"
+  project       = var.project
+  secret_ids    = module.user_code_publisher[0].secret_ids
+  secrets_ready = module.user_code_publisher[0].secrets_ready
+  vms_ready     = module.ac_asg.running_instance_names
+}
+
+
+################################################################################
+# 9a. (OAuth path) Create the App Connector Group with the resolved codes.
+################################################################################
+module "zpa_app_connector_group_oauth" {
+  count                                        = var.use_user_code_method ? 1 : 0
+  source                                       = "../../modules/terraform-zpa-app-connector-group"
+  app_connector_group_name                     = "${var.region}-${module.network.vpc_network_name}"
+  app_connector_group_description              = "${var.app_connector_group_description}-${var.region}-${module.network.vpc_network_name}"
+  app_connector_group_enabled                  = var.app_connector_group_enabled
+  app_connector_group_country_code             = var.app_connector_group_country_code
+  app_connector_group_latitude                 = var.app_connector_group_latitude
+  app_connector_group_longitude                = var.app_connector_group_longitude
+  app_connector_group_location                 = var.app_connector_group_location
+  app_connector_group_upgrade_day              = var.app_connector_group_upgrade_day
+  app_connector_group_upgrade_time_in_secs     = var.app_connector_group_upgrade_time_in_secs
+  app_connector_group_override_version_profile = var.app_connector_group_override_version_profile
+  app_connector_group_dns_query_type           = var.app_connector_group_dns_query_type
+
+  user_codes = module.user_code_reader[0].user_codes
+}
+
+
+################################################################################
+# 9b. (Legacy path) Create the App Connector Group with no user_codes.
+################################################################################
+module "zpa_app_connector_group_legacy" {
+  count                                        = var.use_user_code_method ? 0 : 1
+  source                                       = "../../modules/terraform-zpa-app-connector-group"
+  app_connector_group_name                     = "${var.region}-${module.network.vpc_network_name}"
+  app_connector_group_description              = "${var.app_connector_group_description}-${var.region}-${module.network.vpc_network_name}"
+  app_connector_group_enabled                  = var.app_connector_group_enabled
+  app_connector_group_country_code             = var.app_connector_group_country_code
+  app_connector_group_latitude                 = var.app_connector_group_latitude
+  app_connector_group_longitude                = var.app_connector_group_longitude
+  app_connector_group_location                 = var.app_connector_group_location
+  app_connector_group_upgrade_day              = var.app_connector_group_upgrade_day
+  app_connector_group_upgrade_time_in_secs     = var.app_connector_group_upgrade_time_in_secs
+  app_connector_group_override_version_profile = var.app_connector_group_override_version_profile
+  app_connector_group_dns_query_type           = var.app_connector_group_dns_query_type
+
+  user_codes = []
 }

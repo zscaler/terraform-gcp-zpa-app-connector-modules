@@ -37,3 +37,21 @@ output "running_instances" {
   description = "Per-zone list of VM instance self_links currently registered to each MIG (queried 60s after MIG creation to give instances time to come up). Useful for debugging and for terratest assertions that count live instances."
   value       = [for grp in data.google_compute_instance_group.ac_instance_groups : grp.instances]
 }
+
+# Flattened lists exposed for the OAuth user-code resolver, which needs to
+# address each VM by name + zone. Parsed from the self_links by stripping the
+# URL prefix and splitting on /. The two lists are kept parallel (same index =
+# same VM).
+locals {
+  flat_running_instance_self_links = flatten([for grp in data.google_compute_instance_group.ac_instance_groups : grp.instances])
+}
+
+output "running_instance_names" {
+  description = "Names of every VM currently registered across all MIGs (parallel list to running_instance_zones). Pass to the user-code resolver as instance_names."
+  value       = [for sl in local.flat_running_instance_self_links : reverse(split("/", sl))[0]]
+}
+
+output "running_instance_zones" {
+  description = "Zones for every VM currently registered across all MIGs (parallel list to running_instance_names). Pass to the user-code resolver as instance_zones."
+  value       = [for sl in local.flat_running_instance_self_links : reverse(split("/", sl))[2]]
+}

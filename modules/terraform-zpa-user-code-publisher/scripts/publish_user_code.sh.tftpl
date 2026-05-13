@@ -1,0 +1,173 @@
+#!/usr/bin/env bash
+# App Connector OAuth2 user-code publisher.
+#
+# Runs as the VM startup script. Polls /etc/issue (where the local
+# zpa-connector daemon writes the OAuth enrollment code on first boot),
+# extracts the code, and writes it to a Secret Manager secret slot via
+# the Secret Manager REST API. The companion Terraform reader module
+# refreshes a `data "google_secret_manager_secret_version"` against the
+# same slot and feeds the result into `zpa_app_connector_group.user_codes`.
+#
+# Why curl-against-REST instead of `gcloud secrets versions add`:
+#   The App Connector image is a stripped-down RHEL9 that does not have
+#   the gcloud SDK installed. Adding it would require a yum install
+#   google-cloud-cli (large, requires repo setup, slows boot). The Secret
+#   Manager REST API is a single HTTPS call authenticated with the VM's
+#   metadata-server access token, so we can do everything with curl which
+#   IS on the image.
+#
+# Slot assignment:
+#   The Terraform module pre-creates N secret slots (one per expected VM)
+#   and templates their full IDs into this script as $SECRETS. Each VM
+#   walks the list, claims the first slot with no versions, and publishes
+#   there. State is cached in /var/lib/zpa-user-code/slot so reboots
+#   short-circuit.
+#
+# Templated by Terraform:
+#   ${secret_ids_bash}   bash array literal contents, e.g.  "foo-0" "foo-1"
+#   ${project}           GCP project id that owns the secrets
+#   ${max_wait_seconds}  total seconds to wait for /etc/issue to populate
+
+set -uo pipefail
+
+readonly LOG=/var/log/zpa-user-code-publisher.log
+readonly STATE_DIR=/var/lib/zpa-user-code
+readonly STATE_FILE="$STATE_DIR/slot"
+readonly CODE_RE='[A-Z0-9]{5}-[A-Z0-9]{5}'
+readonly POLL_INTERVAL=10
+readonly MAX_WAIT=${max_wait_seconds}
+readonly PROJECT='${project}'
+readonly TOKEN_URL='http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token'
+readonly SM_API='https://secretmanager.googleapis.com/v1'
+
+readonly SECRETS=(${secret_ids_bash})
+
+log() {
+  local msg="$(date -u +%Y-%m-%dT%H:%M:%SZ) [zpa-user-code] $*"
+  echo "$msg"
+  echo "$msg" >> "$LOG" 2>/dev/null || true
+  command -v logger >/dev/null 2>&1 && logger -t zpa-user-code -- "$*" || true
+}
+
+mkdir -p "$STATE_DIR"
+
+#-----------------------------------------------------------------------------
+# Get a fresh access token from the GCE metadata server. The instance's
+# attached service account must have roles/secretmanager.secretVersionAdder
+# AND the cloud-platform OAuth scope on the instance template.
+#-----------------------------------------------------------------------------
+fetch_token() {
+  # The metadata server returns:
+  #   {"access_token":"ya29...","expires_in":3599,"token_type":"Bearer"}
+  # We grep out the access_token value without needing jq/python.
+  curl -sf -H "Metadata-Flavor: Google" "$TOKEN_URL" \
+    | grep -oE '"access_token"[[:space:]]*:[[:space:]]*"[^"]+"' \
+    | sed -E 's/.*"access_token"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/'
+}
+
+#-----------------------------------------------------------------------------
+# Returns the number of versions on a secret. 0 means "free slot".
+# Uses the REST endpoint: GET /v1/projects/{project}/secrets/{id}/versions
+#-----------------------------------------------------------------------------
+secret_versions_count() {
+  local id="$1" token="$2"
+  local http
+  http=$(curl -sS -o /tmp/sm-list.json -w '%%{http_code}' \
+    -H "Authorization: Bearer $token" \
+    "$SM_API/projects/$PROJECT/secrets/$id/versions")
+  if [[ "$http" != "200" ]]; then
+    log "WARN: list versions for $id returned HTTP $http: $(cat /tmp/sm-list.json 2>/dev/null)"
+    echo "0"
+    return
+  fi
+  # Each version object has its own "name": field. Counting them is enough.
+  grep -c '"name":' /tmp/sm-list.json 2>/dev/null || echo "0"
+}
+
+#-----------------------------------------------------------------------------
+# Publish a code as a new secret version. Body is JSON:
+#   { "payload": { "data": "<base64 of code>" } }
+#-----------------------------------------------------------------------------
+publish_attr() {
+  local id="$1" code="$2" token="$3"
+  local payload http
+  payload=$(printf '%s' "$code" | base64 -w0)
+  http=$(curl -sS -o /tmp/sm-add.json -w '%%{http_code}' -X POST \
+    -H "Authorization: Bearer $token" \
+    -H "Content-Type: application/json" \
+    --data "{\"payload\":{\"data\":\"$payload\"}}" \
+    "$SM_API/projects/$PROJECT/secrets/$id:addVersion")
+  if [[ "$http" != "200" ]]; then
+    log "ERROR: addVersion for $id returned HTTP $http: $(cat /tmp/sm-add.json 2>/dev/null)"
+    return 1
+  fi
+  return 0
+}
+
+wait_for_code() {
+  local elapsed=0 code=""
+  while [[ "$elapsed" -lt "$MAX_WAIT" ]]; do
+    code=$(grep -Eo "$CODE_RE" /etc/issue 2>/dev/null | head -n1 || true)
+    if [[ -n "$code" ]]; then
+      printf '%s' "$code"
+      return 0
+    fi
+    log "no code in /etc/issue yet, waited $${elapsed}s / $${MAX_WAIT}s"
+    sleep "$POLL_INTERVAL"
+    elapsed=$(( elapsed + POLL_INTERVAL ))
+  done
+  log "ERROR: no code in /etc/issue after $${MAX_WAIT}s"
+  return 1
+}
+
+pick_slot() {
+  local token="$1"
+  if [[ -s "$STATE_FILE" ]]; then
+    local cached
+    cached=$(cat "$STATE_FILE")
+    log "reusing cached slot $cached from $STATE_FILE"
+    printf '%s' "$cached"
+    return 0
+  fi
+  for id in "$${SECRETS[@]}"; do
+    local n
+    n=$(secret_versions_count "$id" "$token")
+    if [[ "$n" == "0" ]]; then
+      log "claiming slot $id (currently 0 versions)"
+      printf '%s' "$id"
+      return 0
+    fi
+    log "slot $id has $n version(s) already, trying next"
+  done
+  log "ERROR: all $${#SECRETS[@]} slots already populated"
+  return 1
+}
+
+main() {
+  log "starting (project=$PROJECT, slots=$${#SECRETS[@]})"
+
+  local token code slot
+  token=$(fetch_token)
+  if [[ -z "$token" ]]; then
+    log "ERROR: failed to fetch metadata access token"
+    return 1
+  fi
+  log "metadata token acquired"
+
+  code=$(wait_for_code) || return 1
+  log "code acquired from /etc/issue"
+
+  slot=$(pick_slot "$token") || return 1
+
+  log "publishing to $slot"
+  if publish_attr "$slot" "$code" "$token"; then
+    echo -n "$slot" > "$STATE_FILE"
+    log "published OK, slot recorded in $STATE_FILE"
+  else
+    log "ERROR: publish failed"
+    return 1
+  fi
+}
+
+main || true
+exit 0

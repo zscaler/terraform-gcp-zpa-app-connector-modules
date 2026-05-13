@@ -160,3 +160,9 @@ variable "update_max_unavailable_fixed" {
   description = "Maximum number of instances that can be unavailable during the update process."
   default     = 1
 }
+
+variable "service_account_email" {
+  type        = string
+  description = "Email of the service account to attach to the App Connector VMs. Required for OAuth user-code onboarding (the VM PUTs its enrollment code to the GCE metadata server's guest-attributes endpoint, which is authenticated as this SA against the Compute API). Leave null to use the project's default Compute Engine service account; otherwise pass an SA email that has roles/compute.instanceAdmin.v1 (or the more granular compute.instances.setGuestAttributes permission) on the project."
+  default     = null
+}
