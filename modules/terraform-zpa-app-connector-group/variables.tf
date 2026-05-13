@@ -17,14 +17,14 @@ variable "app_connector_group_enabled" {
 
 variable "app_connector_group_country_code" {
   type        = string
-  description = "Optional: Country code of this App Connector Group. example 'US'"
-  default     = ""
+  description = "Country code of this App Connector Group. example 'US'. The ZPA API auto-derives this field on the server side when omitted, which causes Terraform to detect drift on every subsequent plan. A non-empty value is therefore required for idempotency."
+  default     = "US"
 }
 
 variable "app_connector_group_city_country" {
   type        = string
-  description = "Optional: City and country of this App Connector Group. example 'San Jose, US'"
-  default     = ""
+  description = "City and country of this App Connector Group. example 'San Jose, US'. The ZPA API auto-derives this field on the server side when omitted, which causes Terraform to detect drift on every subsequent plan. A non-empty value is therefore required for idempotency."
+  default     = "San Jose, US"
 }
 
 variable "app_connector_group_latitude" {
