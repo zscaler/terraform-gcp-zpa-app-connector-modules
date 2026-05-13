@@ -31,13 +31,13 @@
 #####################################################################################################################
 
 ## 4. GCP region
-region = "us-central1"
+#region = "us-central1"
 
 ## 5. Path to a service account JSON file (optional). Leave commented to use ADC.
 #credentials                                = "/tmp/ac-tf-service-account.json"
 
 ## 6. GCP Project ID
-project = "my-gcp-project"
+#project = "project_id"
 
 
 #####################################################################################################################
@@ -45,13 +45,13 @@ project = "my-gcp-project"
 #####################################################################################################################
 
 ## 7. Resource name prefix.
-name_prefix = "zsac"
+#name_prefix = "zsac"
 
 ## 8. App Connector instance type. (Default: n2-standard-4)
 #acvm_instance_type                         = "n2-standard-4"
 
 ## 9. AZ resilience.
-az_count = 1
+#az_count = 1
 #zones                                      = ["us-central1-a"]
 
 
@@ -82,24 +82,24 @@ az_count = 1
 #####################################################################################################################
 
 ## 14. Per-zone min / max instance counts.
-min_size = 2
-max_size = 4
+# min_size = 2
+# max_size = 4
 
 ## 15. Scaling metric. Names mirror the AWS ASG predefined metric types.
 ##     Approved values:
 ##       - ASGAverageCPUUtilization (recommended)
 ##       - ASGAverageNetworkIn
 ##       - ASGAverageNetworkOut
-target_tracking_metric = "ASGAverageCPUUtilization"
+# target_tracking_metric = "ASGAverageCPUUtilization"
 
 ## 16. Target value for the chosen metric.
 ##     CPU: percentage 1-100 (50 = scale to keep avg CPU at ~50%)
 ##     Network: bytes-per-second per instance
-target_cpu_util_value = 50
+# target_cpu_util_value = 50
 
 ## 17. Optional autoscaler/healing tuning.
-#cooldown_period                            = 60
-#health_check_grace_period                  = 300
+# cooldown_period                            = 60
+# health_check_grace_period                  = 300
 
 
 #####################################################################################################################

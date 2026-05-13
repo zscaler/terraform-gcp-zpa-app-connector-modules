@@ -175,7 +175,7 @@ resource "local_file" "rhel9_user_data_file" {
 data "google_compute_image" "appconnector" {
   count   = var.use_zscaler_image ? 1 : 0
   project = "mpi-zpa-gcp-marketplace"
-  name    = "zpa-connector-el9-2024-08"
+  name    = "zpa-connector-el9-2025-11"
 }
 
 data "google_compute_image" "rhel_9_latest" {

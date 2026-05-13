@@ -60,14 +60,14 @@
 #####################################################################################################################
 
 ## 4. GCP region where App Connector resources will be deployed.
-region = "us-central1"
+# region = "us-central1"
 
 ## 5. Path to a service account JSON file (optional). Leave commented to fall
 ##    back to Application Default Credentials (recommended).
 #credentials                                = "/tmp/ac-tf-service-account.json"
 
 ## 6. GCP Project ID
-project = "my-gcp-project"
+# project = "my-gcp-project"
 
 
 #####################################################################################################################
@@ -75,7 +75,7 @@ project = "my-gcp-project"
 #####################################################################################################################
 
 ## 7. Name prefix for tags / resource naming. Must be 12 chars or less.
-name_prefix = "zsac"
+# name_prefix = "zsac"
 
 ## 8. App Connector instance type. (Default: n2-standard-4)
 #acvm_instance_type                         = "n2-standard-4"
@@ -87,7 +87,7 @@ name_prefix = "zsac"
 ## 10. Multi-AZ resilience.
 ##     az_count = how many zones to spread MIGs across (1-3, default 1).
 ##     One MIG + one Autoscaler is created per zone.
-az_count = 1
+# az_count = 1
 
 #zones                                      = ["us-central1-a"]
 
@@ -97,9 +97,9 @@ az_count = 1
 #####################################################################################################################
 
 ## 11. Per-zone min / max instance counts. With az_count = 2 and max_size = 4,
-##     the cluster can scale up to 8 instances total (4 per zone).
-min_size = 2
-max_size = 4
+# ##     the cluster can scale up to 8 instances total (4 per zone).
+# min_size = 2
+# max_size = 4
 
 ## 12. Scaling metric. Names mirror the AWS ASG predefined metric types so
 ##     callers can switch clouds without renaming.
@@ -107,12 +107,12 @@ max_size = 4
 ##       - ASGAverageCPUUtilization (recommended)
 ##       - ASGAverageNetworkIn
 ##       - ASGAverageNetworkOut
-target_tracking_metric = "ASGAverageCPUUtilization"
+# target_tracking_metric = "ASGAverageCPUUtilization"
 
 ## 13. Target value for the chosen metric.
 ##     For CPU: percentage 1-100 (50 = scale to keep avg CPU at ~50%)
 ##     For Network: bytes-per-second per instance
-target_cpu_util_value = 50
+# target_cpu_util_value = 50
 
 ## 14. Cooldown period (seconds) the autoscaler waits before sampling a fresh
 ##     instance after launch. Default 60s is conservative for fast-booting AMIs.
