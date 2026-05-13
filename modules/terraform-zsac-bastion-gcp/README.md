@@ -8,15 +8,15 @@ By default, the example Terraform template will create a new dedicated subnet in
 ## Requirements
 
 | Name | Version |
-|------|---------|
+| ---- | ------- |
 | <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) | >= 0.13.7, < 2.0.0 |
-| <a name="requirement_google"></a> [google](#requirement\_google) | ~> 6.4.0 |
+| <a name="requirement_google"></a> [google](#requirement\_google) | ~> 7.31.0 |
 
 ## Providers
 
 | Name | Version |
-|------|---------|
-| <a name="provider_google"></a> [google](#provider\_google) | ~> 6.4.0 |
+| ---- | ------- |
+| <a name="provider_google"></a> [google](#provider\_google) | ~> 7.31.0 |
 
 ## Modules
 
@@ -25,16 +25,17 @@ No modules.
 ## Resources
 
 | Name | Type |
-|------|------|
-| [google_compute_firewall.ssh_internet_ingress](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/compute_firewall) | resource |
+| ---- | ---- |
+| [google_compute_firewall.ssh_internet_ingress_v4](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/compute_firewall) | resource |
+| [google_compute_firewall.ssh_internet_ingress_v6](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/compute_firewall) | resource |
 | [google_compute_instance.bastion](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/compute_instance) | resource |
 | [google_service_account.service_account_bastion](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/service_account) | resource |
 
 ## Inputs
 
 | Name | Description | Type | Default | Required |
-|------|-------------|------|---------|:--------:|
-| <a name="input_bastion_ssh_allow_ip"></a> [bastion\_ssh\_allow\_ip](#input\_bastion\_ssh\_allow\_ip) | CIDR blocks of trusted networks for bastion host ssh access from Internet | `list(string)` | <pre>[<br>  "0.0.0.0/0"<br>]</pre> | no |
+| ---- | ----------- | ---- | ------- | :------: |
+| <a name="input_bastion_ssh_allow_ip"></a> [bastion\_ssh\_allow\_ip](#input\_bastion\_ssh\_allow\_ip) | CIDR blocks of trusted networks for bastion host ssh access from Internet. Both IPv4 (e.g. 1.2.3.4/32) and IPv6 (e.g. 2001:db8::1/128) are accepted; the module splits them into two firewall rules because GCP does not allow mixed-family source\_ranges in a single rule. NOTE: IPv6 host addresses MUST use /128, not /32 — /32 is only valid for IPv4. | `list(string)` | <pre>[<br/>  "0.0.0.0/0"<br/>]</pre> | no |
 | <a name="input_instance_type"></a> [instance\_type](#input\_instance\_type) | The bastion host instance type | `string` | `"e2-micro"` | no |
 | <a name="input_name_prefix"></a> [name\_prefix](#input\_name\_prefix) | A prefix to associate to all the bastion module resources | `string` | `null` | no |
 | <a name="input_public_subnet"></a> [public\_subnet](#input\_public\_subnet) | The public subnet where the bastion host has to be attached | `string` | n/a | yes |
@@ -47,6 +48,6 @@ No modules.
 ## Outputs
 
 | Name | Description |
-|------|-------------|
+| ---- | ----------- |
 | <a name="output_public_ip"></a> [public\_ip](#output\_public\_ip) | Instance Public IP |
 <!-- END OF PRE-COMMIT-TERRAFORM DOCS HOOK -->

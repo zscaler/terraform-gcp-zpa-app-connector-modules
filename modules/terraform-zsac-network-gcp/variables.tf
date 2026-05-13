@@ -33,7 +33,14 @@ variable "subnet_ac" {
 
 variable "allowed_ssh_from_internal_cidr" {
   type        = list(string)
-  description = "CIDR allowed to ssh the bastion host from Intranet"
+  description = "CIDR ranges allowed to access the App Connector management interface from the intranet. Both IPv4 and IPv6 are accepted; the module splits them into two firewall rules because GCP does not allow mixed-family source_ranges in a single rule. NOTE: IPv6 host addresses MUST use /128, not /32 — /32 is only valid for IPv4."
+  validation {
+    condition = alltrue([
+      for c in var.allowed_ssh_from_internal_cidr :
+      !(strcontains(c, ":") && endswith(c, "/32"))
+    ])
+    error_message = "allowed_ssh_from_internal_cidr contains an IPv6 address with a /32 mask. Use /128 for IPv6 host addresses."
+  }
 }
 
 variable "allowed_ports" {

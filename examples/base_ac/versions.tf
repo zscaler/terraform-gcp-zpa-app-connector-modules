@@ -2,15 +2,15 @@ terraform {
   required_providers {
     google = {
       source  = "hashicorp/google"
-      version = "~> 6.4.0"
+      version = "~> 7.31.0"
     }
     random = {
       source  = "hashicorp/random"
-      version = "~> 3.6.0"
+      version = "~> 3.8.0"
     }
     local = {
       source  = "hashicorp/local"
-      version = "~> 2.5.0"
+      version = "~> 2.8.0"
     }
     null = {
       source  = "hashicorp/null"
@@ -18,11 +18,11 @@ terraform {
     }
     tls = {
       source  = "hashicorp/tls"
-      version = "~> 4.0.0"
+      version = "~> 4.2.0"
     }
     zpa = {
       source  = "zscaler/zpa"
-      version = "~> 3.33.0"
+      version = "~> 4.4.0"
     }
   }
 
@@ -35,6 +35,14 @@ provider "google" {
   project     = var.project
   region      = var.region
 }
+
+# Note on credentials precedence:
+# - If `var.credentials` is set, it is used (path to a JSON key file or the JSON itself).
+# - If left null/empty, the google provider falls back to:
+#     1. GOOGLE_CREDENTIALS / GOOGLE_APPLICATION_CREDENTIALS env vars
+#     2. Application Default Credentials (`gcloud auth application-default login`)
+# This lets the example work both with a downloaded SA key and on projects where
+# `iam.disableServiceAccountKeyCreation` blocks key downloads.
 
 # Configure the ZPA Provider
 provider "zpa" {

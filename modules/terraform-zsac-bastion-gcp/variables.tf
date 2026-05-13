@@ -40,8 +40,18 @@ variable "workload_image_name" {
 
 variable "bastion_ssh_allow_ip" {
   type        = list(string)
-  description = "CIDR blocks of trusted networks for bastion host ssh access from Internet"
+  description = "CIDR blocks of trusted networks for bastion host ssh access from Internet. Both IPv4 (e.g. 1.2.3.4/32) and IPv6 (e.g. 2001:db8::1/128) are accepted; the module splits them into two firewall rules because GCP does not allow mixed-family source_ranges in a single rule. NOTE: IPv6 host addresses MUST use /128, not /32 — /32 is only valid for IPv4."
   default     = ["0.0.0.0/0"]
+  validation {
+    # An IPv6 CIDR contains ":". When the mask is "/32" the entry is malformed
+    # (the IPv6 host mask is /128). Catch this at plan time rather than at the
+    # GCP API level where the error message is generic.
+    condition = alltrue([
+      for c in var.bastion_ssh_allow_ip :
+      !(strcontains(c, ":") && endswith(c, "/32"))
+    ])
+    error_message = "bastion_ssh_allow_ip contains an IPv6 address with a /32 mask. Use /128 for IPv6 host addresses."
+  }
 }
 
 variable "vpc_network" {

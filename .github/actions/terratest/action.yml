@@ -1,0 +1,65 @@
+name: "Terratest"
+description: "Runs Terratest for a specified path."
+inputs:
+  tf_version:
+    description: "TF version used."
+    required: true
+  path:
+    description: "Path to Terraform module."
+    required: true
+  terratest_action:
+    description: The action (name of a test in Terratest) that will be passed to the Makefile's ACTION parameter
+    type: string
+    required: true
+  pr-id:
+    description: A PR number. Optional value, you might want to use it to prefix resources created for a particular PR to identify them easily.
+    type: string
+    default: ""
+    required: false
+
+runs:
+  using: "composite"
+  steps:
+    - name: setup Terraform
+      uses: hashicorp/setup-terraform@633666f66e0061ca3b725c73b2ec20cd13a8fdd1 #v2
+      with:
+        terraform_version: ${{ inputs.tf_version }}
+        terraform_wrapper: false
+
+    - name: setup Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: "1.25"
+
+    # GCP auth. Two modes supported, picked at runtime by what the caller sets:
+    #   1. Service Account JSON key: set GCP_CREDENTIALS_JSON in repo secrets.
+    #   2. Workload Identity Federation: set both WORKLOAD_IDENTITY_PROVIDER and
+    #      GCP_SERVICE_ACCOUNT in repo secrets (and leave GCP_CREDENTIALS_JSON empty).
+    # SA key is the simpler day-1 setup; WIF is the more secure long-term option.
+    - name: login to GCP (service account key)
+      if: env.GCP_CREDENTIALS_JSON != ''
+      uses: google-github-actions/auth@3a3c4c57d294ef65efaaee4ff17b22fa88dd3c69 #v1
+      with:
+        credentials_json: ${{ env.GCP_CREDENTIALS_JSON }}
+
+    - name: login to GCP (workload identity federation)
+      if: env.GCP_CREDENTIALS_JSON == '' && env.WORKLOAD_IDENTITY_PROVIDER != ''
+      uses: google-github-actions/auth@3a3c4c57d294ef65efaaee4ff17b22fa88dd3c69 #v1
+      with:
+        workload_identity_provider: ${{ env.WORKLOAD_IDENTITY_PROVIDER }}
+        service_account: ${{ env.GCP_SERVICE_ACCOUNT }}
+
+    - name: ${{ inputs.terratest_action }} infrastructure
+      env:
+        TPATH:      ${{ inputs.path }}
+        ACTION:     ${{ inputs.terratest_action }}
+        PRID:       ${{ inputs.pr-id }}
+        PROJECT_ID: ${{ env.PROJECT_ID }}
+        ORG_ID:     ${{ env.ORG_ID }}
+        # Surface PRID to Terraform as TF_VAR_pr_id so test fixtures can
+        # name resources `ghcip<PR_ID>-...` (PR runs) or `ghcitt-...`
+        # (release / scheduled runs). The shared gcp_cleanup composite
+        # action greps Cloud Asset Inventory for these prefixes.
+        TF_VAR_pr_id: ${{ inputs.pr-id }}
+      shell: bash
+      run: make $TPATH ACTION=$ACTION

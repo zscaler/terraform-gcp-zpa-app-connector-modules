@@ -38,17 +38,50 @@ resource "google_compute_instance" "bastion" {
 
 
 ################################################################################
-# Create pre-defined GCP Firewall rules for Bastion
+# Split user-supplied source ranges into IPv4 vs IPv6 buckets.
+#
+# GCP firewall rules cannot mix IPv4 and IPv6 source_ranges in a single rule
+# (see https://cloud.google.com/firewall/docs/using-firewalls), so we split
+# the user-supplied list and create two rules — one per address family.
+# Detection is by colon character: IPv6 CIDRs always contain ":", IPv4 never.
 ################################################################################
-resource "google_compute_firewall" "ssh_internet_ingress" {
-  name        = "${var.name_prefix}-fw-ssh-for-internet-${var.resource_tag}"
-  description = "Permit SSH Access to bastion host from Internet for approved source IP ranges"
+locals {
+  bastion_ssh_allow_ip_v4 = [for c in var.bastion_ssh_allow_ip : c if !strcontains(c, ":")]
+  bastion_ssh_allow_ip_v6 = [for c in var.bastion_ssh_allow_ip : c if strcontains(c, ":")]
+}
+
+
+################################################################################
+# Create pre-defined GCP Firewall rules for Bastion (IPv4)
+################################################################################
+resource "google_compute_firewall" "ssh_internet_ingress_v4" {
+  count       = length(local.bastion_ssh_allow_ip_v4) > 0 ? 1 : 0
+  name        = "${var.name_prefix}-fw-ssh-for-internet-v4-${var.resource_tag}"
+  description = "Permit SSH access to bastion host from approved IPv4 source ranges"
   network     = var.vpc_network
   direction   = "INGRESS"
   allow {
     protocol = "tcp"
     ports    = ["22"]
   }
-  source_ranges           = var.bastion_ssh_allow_ip
+  source_ranges           = local.bastion_ssh_allow_ip_v4
+  target_service_accounts = [google_service_account.service_account_bastion.email]
+}
+
+
+################################################################################
+# Create pre-defined GCP Firewall rules for Bastion (IPv6)
+################################################################################
+resource "google_compute_firewall" "ssh_internet_ingress_v6" {
+  count       = length(local.bastion_ssh_allow_ip_v6) > 0 ? 1 : 0
+  name        = "${var.name_prefix}-fw-ssh-for-internet-v6-${var.resource_tag}"
+  description = "Permit SSH access to bastion host from approved IPv6 source ranges"
+  network     = var.vpc_network
+  direction   = "INGRESS"
+  allow {
+    protocol = "tcp"
+    ports    = ["22"]
+  }
+  source_ranges           = local.bastion_ssh_allow_ip_v6
   target_service_accounts = [google_service_account.service_account_bastion.email]
 }

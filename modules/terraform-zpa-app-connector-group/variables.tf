@@ -21,6 +21,12 @@ variable "app_connector_group_country_code" {
   default     = ""
 }
 
+variable "app_connector_group_city_country" {
+  type        = string
+  description = "Optional: City and country of this App Connector Group. example 'San Jose, US'"
+  default     = ""
+}
+
 variable "app_connector_group_latitude" {
   type        = string
   description = "Latitude of the App Connector Group. Integer or decimal. With values in the range of -90 to 90"
@@ -54,21 +60,6 @@ variable "app_connector_group_override_version_profile" {
   default     = true
 }
 
-variable "app_connector_group_version_profile_id" {
-  type        = string
-  description = "Optional: ID of the version profile. To learn more, see Version Profile Use Cases. https://help.zscaler.com/zpa/configuring-version-profile"
-  default     = "2"
-
-  validation {
-    condition = (
-      var.app_connector_group_version_profile_id == "0" || #Default = 0
-      var.app_connector_group_version_profile_id == "1" || #Previous Default = 1
-      var.app_connector_group_version_profile_id == "2"    #New Release = 2
-    )
-    error_message = "Input app_connector_group_version_profile_id must be set to an approved value."
-  }
-}
-
 variable "app_connector_group_dns_query_type" {
   type        = string
   description = "Whether to enable IPv4 or IPv6, or both, for DNS resolution of all applications in the App Connector Group"
@@ -82,4 +73,10 @@ variable "app_connector_group_dns_query_type" {
     )
     error_message = "Input app_connector_group_dns_query_type must be set to an approved value."
   }
+}
+
+variable "user_codes" {
+  type        = list(string)
+  description = "OAuth2 user codes retrieved from deployed App Connector VMs (/etc/issue). These codes are required for enrolling App Connectors using the new OAuth2 authentication method."
+  default     = []
 }

@@ -14,10 +14,11 @@
 ##    For any questions populating the below values, please reference:
 ##    https://registry.terraform.io/providers/zscaler/zpa/latest/docs/resources/zpa_provisioning_key
 
-#enrollment_cert                                = "Connector"
 #provisioning_key_name                          = "new_key_name"
 #provisioning_key_enabled                       = true
 #provisioning_key_max_usage                     = 10
+# Note: the "Connector" enrollment certificate is now resolved automatically
+# inside the modules. There is no longer an `enrollment_cert` input.
 
 ## 2. ZPA App Connector Group variables. Uncomment and replace default values as desired for your deployment.
 ##    For any questions populating the below values, please reference:
@@ -33,8 +34,10 @@
 #app_connector_group_upgrade_day                = "SUNDAY"
 #app_connector_group_upgrade_time_in_secs       = "66600"
 #app_connector_group_override_version_profile   = true
-#app_connector_group_version_profile_id         = "2"
 #app_connector_group_dns_query_type             = "IPV4_IPV6"
+# Note: the version profile is now pinned to "Default" inside the module via
+# `data "zpa_customer_version_profile"`. There is no longer an
+# `app_connector_group_version_profile_id` input.
 
 
 #####################################################################################################################
@@ -58,7 +61,7 @@
 ## 5. GCP region where App Connector resources will be deployed. This environment variable is automatically populated if running ZSEC script
 ##    and thus will override any value set here. Only uncomment and set this value if you are deploying terraform standalone.
 
-#region                                     = "us-central1"
+# region = "us-central1"
 
 ## 6. Path relative to terraform root directory where the service account json file exists for terraform to authenticate to Google Cloud
 
@@ -66,7 +69,7 @@
 
 ## 7. GCP Project ID to deploy/reference resources created
 
-#project                                    = "ac-host-project"
+#project = "project_id"
 
 
 #####################################################################################################################
@@ -76,7 +79,7 @@
 ##    Due to GCP character constraints, there are validations where this value must be 12 or less characters and only
 ##    lower case.
 
-# name_prefix                                = "zsac"
+# name_prefix = "zsac"
 
 ## 9. App Connector GCP Compute Instance size selection. Uncomment acvm_instance_type line with desired vm size to change.
 ##    (Default: n2-standard-4)
@@ -110,7 +113,7 @@
 ## Example: Region is us-central1 with az_count set to 2. Terraform will create 1 Instance Group in us-central1-a and 1x Instance Group in us-central1-b
 ##          (or whatever first two zones report back as available)
 
-# az_count                                   = 2
+# az_count = 2
 
 
 ## Option B. If you require Instance Groups to be set explicitly in certain availability zones, you can override the region lookup and set the zones.
@@ -118,13 +121,13 @@
 ## Note: By setting zone names here, Terraform will ignore any value set for variable az_count. We also cannot verify the availability correct naming syntax
 ##       of the names set.
 
-# zones                                      = ["us-central1-a","us-central1-b"]
+# zones = ["us-central1-a", "us-central1-b"]
 
 ## 12. The number of App Connector appliances to provision per Instance Group/Availability Zone.
 ##    (Default: varies per deployment type template)
 ##    E.g. ac_count set to 2 and var.az_count or var.zones set to 2 will create 2x Zonal Instance Groups with 2x target CCs in each Instance Group
 
-# ac_count                                   = 2
+# ac_count = 2
 
 ## 13. Custom image name to used for deploying App Connector appliances. By default, Terraform will lookup the latest Red Hat Enterprise Linux 9 image version from the Google Marketplace.
 ##     This variable is provided if a customer desires to override/retain a specific image name/Instance Template version

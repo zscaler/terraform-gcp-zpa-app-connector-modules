@@ -1,497 +1,826 @@
 #!/usr/bin/env bash
+#
+# zsac - interactive bootstrapper for the terraform-gcp-zpa-app-connector-modules
+# examples (base_ac, ac). Collects GCP and ZPA credentials + deployment options
+# into a `.zsacrc` env file, downloads a pinned `terraform` binary into ./bin,
+# then runs `terraform init` + `apply`/`destroy` for the chosen example.
+#
+# Auth modes (ZPA Terraform provider):
+#   - OneAPI / Zidentity (recommended for tenants migrated to Zidentity)
+#       env vars: ZSCALER_CLIENT_ID, ZSCALER_CLIENT_SECRET, ZSCALER_VANITY_DOMAIN,
+#                 ZSCALER_CLOUD (optional, only "beta" supported here),
+#                 ZPA_CUSTOMER_ID
+#   - Legacy ZPA (for tenants still on the legacy framework, or GOV/GOVUS)
+#       env vars: ZPA_CLIENT_ID, ZPA_CLIENT_SECRET, ZPA_CUSTOMER_ID, ZPA_CLOUD,
+#                 plus ZSCALER_USE_LEGACY_CLIENT=true
+#
+# Usage: ./zsac <up|destroy>
 
 set -eo pipefail
 
-usage()
-{
-    echo "Usage: $0 <up|destroy>"
+# --------------------------------------------------------------------------- #
+# Branding                                                                    #
+# --------------------------------------------------------------------------- #
+ZSCALER_ART=(
+"███████╗███████╗ ██████╗ █████╗ ██╗     ███████╗██████╗ "
+"╚══███╔╝██╔════╝██╔════╝██╔══██╗██║     ██╔════╝██╔══██╗"
+"  ███╔╝ ███████╗██║     ███████║██║     █████╗  ██████╔╝"
+" ███╔╝  ╚════██║██║     ██╔══██║██║     ██╔══╝  ██╔══██╗"
+"███████╗███████║╚██████╗██║  ██║███████╗███████╗██║  ██║"
+"╚══════╝╚══════╝ ╚═════╝╚═╝  ╚═╝╚══════╝╚══════╝╚═╝  ╚═╝"
+)
+
+supports_truecolor() {
+    # No color when not a TTY, or when NO_COLOR is set (https://no-color.org/).
+    [[ -t 1 ]] || return 1
+    [[ -z "${NO_COLOR:-}" ]] || return 1
+    case "${COLORTERM:-}" in
+        truecolor|24bit) return 0 ;;
+    esac
+    case "${TERM:-}" in
+        *256color*|*kitty*|*iterm*) return 0 ;;
+    esac
+    return 1
+}
+
+# Print one line of the logo with a left-to-right gradient (light blue -> deep
+# blue) using 24-bit ANSI escape codes. Skips coloring spaces so the box stays
+# clean.
+print_gradient_line() {
+    local line="$1" width="$2"
+    # Pad to width so gradient spans the full block, even on shorter glyph rows.
+    local padded
+    padded=$(printf '%-*s' "$width" "$line")
+    local i len
+    len=${#padded}
+    for (( i=0; i<len; i++ )); do
+        local ch="${padded:i:1}"
+        if [[ "$ch" == " " ]]; then
+            printf ' '
+            continue
+        fi
+        # Linear interpolate between (0x55, 0xCC, 0xFF) and (0x00, 0x3D, 0x99).
+        local t_num=$(( i * 1000 / (len - 1 > 0 ? len - 1 : 1) ))
+        local r=$(( 0x55 + (0x00 - 0x55) * t_num / 1000 ))
+        local g=$(( 0xCC + (0x3D - 0xCC) * t_num / 1000 ))
+        local b=$(( 0xFF + (0x99 - 0xFF) * t_num / 1000 ))
+        printf '\x1b[38;2;%d;%d;%dm%s' "$r" "$g" "$b" "$ch"
+    done
+    printf '\x1b[0m'
+}
+
+print_zscaler_logo() {
+    local width=0 line
+    for line in "${ZSCALER_ART[@]}"; do
+        (( ${#line} > width )) && width=${#line}
+    done
+    local pad=2
+    local inner=$(( width + pad * 2 ))
+
+    if ! supports_truecolor; then
+        printf '\n  +'; printf -- '-%.0s' $(seq 1 "$inner"); printf '+\n'
+        for line in "${ZSCALER_ART[@]}"; do
+            printf '  |%*s%s%*s|\n' "$pad" '' "$line" $(( pad + width - ${#line} )) ''
+        done
+        printf '  +'; printf -- '-%.0s' $(seq 1 "$inner"); printf '+\n\n'
+        return
+    fi
+
+    # Use $'...' ANSI-C quoting so \x1b is converted to the actual ESC byte at
+    # assignment time. This is required because we pass these as %s arguments
+    # to printf below; printf only interprets \x1b sequences inside the FORMAT
+    # string, not inside %s arguments.
+    local border=$'\x1b[38;2;51;85;153m'
+    local reset=$'\x1b[0m'
+
+    # Build a string of N "─" once to avoid a per-cell printf in the corners.
+    local hline=''
+    local i
+    for (( i=0; i<inner; i++ )); do hline+='─'; done
+
+    printf '\n  %s╭%s╮%s\n' "$border" "$hline" "$reset"
+    for line in "${ZSCALER_ART[@]}"; do
+        printf '  %s│%s' "$border" "$reset"
+        printf '%*s' "$pad" ''
+        print_gradient_line "$line" "$width"
+        printf '%*s' "$pad" ''
+        printf '%s│%s\n' "$border" "$reset"
+    done
+    printf '  %s╰%s╯%s\n\n' "$border" "$hline" "$reset"
+}
+
+# --------------------------------------------------------------------------- #
+# Tiny UX helpers                                                             #
+# --------------------------------------------------------------------------- #
+info() { printf '  • %s\n' "$1"; }
+ok()   { printf '  [OK]  %s\n' "$1"; }
+fail() { printf '  [ERR] %s\n' "$1" >&2; }
+die()  { fail "$1"; exit "${2:-1}"; }
+
+# confirm "Some prompt?" [default-yes|default-no]
+# Returns 0 for yes, 1 for no.
+confirm() {
+    local prompt="$1" default="${2:-default-yes}"
+    local suffix answer
+    if [[ "$default" == "default-yes" ]]; then suffix='[Y/n]'; else suffix='[y/N]'; fi
+    while true; do
+        read -r -p "  $prompt $suffix " answer
+        if [[ -z "$answer" ]]; then
+            [[ "$default" == "default-yes" ]] && return 0 || return 1
+        fi
+        case "${answer,,}" in
+            y|yes) return 0 ;;
+            n|no)  return 1 ;;
+            *)     printf '    Please answer yes or no.\n' ;;
+        esac
+    done
+}
+
+# ask "Prompt" [default] [secret]   ->   echoes the answer
+ask() {
+    local prompt="$1" default="${2:-}" secret="${3:-}" answer
+    local suffix=''
+    [[ -n "$default" ]] && suffix=" [$default]"
+    while true; do
+        if [[ "$secret" == "secret" ]]; then
+            read -r -s -p "  $prompt$suffix: " answer; printf '\n'
+        else
+            read -r -p "  $prompt$suffix: " answer
+        fi
+        [[ -n "$answer" ]] && { printf '%s' "$answer"; return; }
+        [[ -n "$default" ]] && { printf '%s' "$default"; return; }
+        printf '    A value is required.\n' >&2
+    done
+}
+
+# --------------------------------------------------------------------------- #
+# Argument parsing                                                            #
+# --------------------------------------------------------------------------- #
+usage() {
+    printf 'Usage: %s <up|destroy>\n' "$0" >&2
     exit 1
 }
 
-if [ $# -ne 1 ] ; then
-    usage
-else
-    case $1 in
-      up|destroy|do)
-          oper=$1
-      ;;
-      *)
-          usage
-      ;;
-    esac
-fi
+[[ $# -eq 1 ]] || usage
+case "$1" in
+    up|destroy) oper="$1" ;;
+    *)          usage ;;
+esac
 
-if [[ "$oper" == "up" ]]; then
-    # shellcheck disable=SC2153
-    if [ -z "$dtype" ]; then
+print_zscaler_logo
+
+# --------------------------------------------------------------------------- #
+# Deployment-type selection                                                   #
+#                                                                             #
+# The repo ships four example root configs; the user picks one by number:     #
+#                                                                             #
+#   1) base_ac      - greenfield, FIXED-size MIG (single VM per zone).        #
+#   2) base_ac_asg  - greenfield, AUTOSCALING per-zone MIG + autoscaler.      #
+#   3) ac           - brownfield, FIXED-size MIG into existing VPC.           #
+#   4) ac_asg       - brownfield, AUTOSCALING per-zone MIG into existing VPC. #
+#                                                                             #
+# Default is option 1 (greenfield / base_ac, fixed size).                     #
+# --------------------------------------------------------------------------- #
+if [[ "$oper" == "up" && -z "${dtype:-}" ]]; then
+    info "Deployment type:"
+    info "  1) base_ac      - greenfield, fixed-size MIG                  [default]"
+    info "  2) base_ac_asg  - greenfield, autoscaling MIG + autoscaler"
+    info "  3) ac           - brownfield, fixed-size MIG (BYO VPC)"
+    info "  4) ac_asg       - brownfield, autoscaling MIG (BYO VPC)"
     while true; do
-     read -r -p "Deployment: ( greenfield | brownfield ): " deploy
-
-    case $deploy in
-      greenfield)
-          break
-      ;;
-      brownfield)
-          break
-      ;;    
-      *)
-          echo "Invalid Deployment Type: ${dtype}"
-      ;;
-    esac
-  done
-
-    while [ "$deploy" == "greenfield" ]; do
-     read -r -p "Deployment Type: ( base_ac ): " dtype
-
-    case $dtype in
-      base_ac)
-          echo "Deployment Type: ${dtype}"
-          break
-      ;;
-      *)
-          echo "Invalid Deployment Type: ${dtype}"
-      ;;
-    esac
-  done
-
-  while [ "$deploy" == "brownfield" ]; do
-     read -r -p "Deployment Type: ( ac ) : " dtype
-
-    case $dtype in
-      ac)
-          echo "Deployment Type: ${dtype}"
-          break
-      ;;
-      *)
-          echo "Invalid Deployment Type: ${dtype}"
-      ;;
-    esac
-  done
-    else
-      dtype=$dtype
-    fi
+        read -r -p "  Choose [1]: " choice
+        choice="${choice:-1}"
+        case "$choice" in
+            1|base_ac)      dtype=base_ac;     break ;;
+            2|base_ac_asg)  dtype=base_ac_asg; break ;;
+            3|ac)           dtype=ac;          break ;;
+            4|ac_asg)       dtype=ac_asg;      break ;;
+            *) printf '    Invalid choice: %s. Pick 1, 2, 3, or 4.\n' "$choice" ;;
+        esac
+    done
+    info "Deployment type: $dtype"
 fi
 
-echo "Discovering processor architecture..."
+# --------------------------------------------------------------------------- #
+# OS / arch detection (used for terraform binary download)                    #
+# --------------------------------------------------------------------------- #
+info "Discovering processor architecture..."
 archdetect=$(uname -m)
-
 tversion=1.1.9
-echo "Detecting OS..."
+
+info "Detecting OS..."
 if [[ "$OSTYPE" == "linux"* ]]; then
-    os_str=linux
-    arch=amd64
-    ostype=Linux
-elif [[ "$OSTYPE" == "darwin"* && $archdetect == "arm64" ]]; then
-    os_str=darwin
-    arch=arm64
-    ostype=MacOS_arm64
+    os_str=linux; arch=amd64; ostype=Linux
+elif [[ "$OSTYPE" == "darwin"* && "$archdetect" == "arm64" ]]; then
+    os_str=darwin; arch=arm64; ostype=MacOS_arm64
 elif [[ "$OSTYPE" == "darwin"* ]]; then
-    os_str=darwin
-    arch=amd64
-    ostype=MacOS
+    os_str=darwin; arch=amd64; ostype=MacOS
 elif [[ "$OSTYPE" == "freebsd"* ]]; then
-    os_str=freebsd
-    arch=amd64
-    ostype=FreeBSD
-    echo "FreeBSD support coming soon..."
-    exit 1
+    die "FreeBSD support coming soon..."
 else
-    echo "Unsupported OS: $OSTYPE"
-    exit 1
+    die "Unsupported OS: $OSTYPE"
 fi
-echo "OS is $ostype"
+ok "OS is $ostype"
 
 dir=bin
-echo "Creating a local $dir directory if not present..."
-if [[ ! -e $dir ]]; then
-    mkdir $dir
-elif [[ ! -d $dir ]]; then
-    echo "$dir already exists but is not a directory" 1>&2
-    exit 1
+info "Creating a local $dir directory if not present..."
+if [[ ! -e "$dir" ]]; then
+    mkdir "$dir"
+elif [[ ! -d "$dir" ]]; then
+    die "$dir already exists but is not a directory"
 fi
 
-gcp_regions=[\
-"asia-east1","asia-east2","asia-northeast1","asia-northeast2","asia-northeast3",\
-"asia-south1","asia-south2","asia-southeast1","asia-southeast2","australia-southeast1",\
-"australia-southeast2","europe-central2","europe-north1","europe-southwest1","europe-west1",\
-"europe-west2","europe-west3","europe-west4","europe-west6","europe-west8",\
-"europe-west9","europe-west12","me-central1","me-west1","northamerica-northeast1",\
-"northamerica-northeast2","southamerica-east1","southamerica-west1","us-central1","us-east1",\
-"us-east4","us-east5","us-south1","us-west1","us-west2",\
-"us-west3","us-west4"\
-]
+# --------------------------------------------------------------------------- #
+# GCP regions (used to validate region input)                                 #
+# --------------------------------------------------------------------------- #
+gcp_regions=(
+    asia-east1 asia-east2 asia-northeast1 asia-northeast2 asia-northeast3
+    asia-south1 asia-south2 asia-southeast1 asia-southeast2 australia-southeast1
+    australia-southeast2 europe-central2 europe-north1 europe-southwest1 europe-west1
+    europe-west2 europe-west3 europe-west4 europe-west6 europe-west8
+    europe-west9 europe-west12 me-central1 me-west1 northamerica-northeast1
+    northamerica-northeast2 southamerica-east1 southamerica-west1 us-central1 us-east1
+    us-east4 us-east5 us-south1 us-west1 us-west2
+    us-west3 us-west4
+)
+is_valid_region() {
+    local r
+    for r in "${gcp_regions[@]}"; do
+        [[ "$r" == "$1" ]] && return 0
+    done
+    return 1
+}
 
-echo "Checking GCP Environment Variables and App Connector bootstrap requirements ..."
-# if .zsacrc is not present we'll assume that GCO env was never set
-gcp_location_default="us-central1"
-project_id_default="ac-poc-host-project-01"
+# --------------------------------------------------------------------------- #
+# Credential collection (only on first run; subsequent runs reuse .zsacrc)    #
+# --------------------------------------------------------------------------- #
 
-if [[ ! -e ./.zsacrc ]]; then
-    read -r -p "Enter Google Cloud Host Project Credential File Path: " gcp_credentials
-    if [ -z "$gcp_credentials" ];then
-      echo "Invalid Google Cloud Host Project credentials entered."
-      echo "Delete .zsacrc file and re-run zsec up..."
-      exit 1
+# Collect GCP host-project credentials (kept as before; ZPA auth is split out).
+# GCP authentication can be supplied two ways. The google Terraform provider's
+# discovery chain handles both transparently when TF_VAR_credentials is unset.
+#
+#   1. Service account JSON key file
+#        TF_VAR_credentials=/path/to/key.json   (consumed by provider "google"
+#        in examples/*/versions.tf, where var.credentials defaults to null).
+#
+#   2. Application Default Credentials (recommended for projects that disable
+#      user-managed SA keys via org policy `iam.disableServiceAccountKeyCreation`).
+#        gcloud auth application-default login
+#        # OR (if impersonating a service account):
+#        gcloud auth application-default login --impersonate-service-account=SA_EMAIL
+#      In this mode no key file is written; the google provider picks up ADC
+#      from GOOGLE_APPLICATION_CREDENTIALS or ~/.config/gcloud/application_default_credentials.json.
+#
+# The script auto-detects an ADC file if it exists, but always asks the user
+# to confirm the auth method so we don't silently pick ADC when the user
+# intended to use a key file (or vice versa).
+collect_gcp_creds() {
+    local gcp_location_default="us-central1"
+    local project_id_default="ac-poc-host-project-01"
+
+    local project_id gcp_location
+
+    # ----- pick auth method ----------------------------------------------- #
+    local default_method="keyfile" adc_file=""
+    if [[ -n "${GOOGLE_APPLICATION_CREDENTIALS:-}" ]]; then
+        adc_file="$GOOGLE_APPLICATION_CREDENTIALS"
+        default_method="adc"
+    elif [[ -r "$HOME/.config/gcloud/application_default_credentials.json" ]]; then
+        adc_file="$HOME/.config/gcloud/application_default_credentials.json"
+        default_method="adc"
     fi
-    echo "export TF_VAR_credentials=${gcp_credentials}" >> .zsacrc
 
-    read -r -p "Enter Google Cloud Host Project ID[Default=$project_id_default]: " project_id
-    project_id=${project_id:-$project_id_default}
-    echo "export TF_VAR_project=${project_id}" >> .zsacrc
+    # Default option number reflects what was auto-detected; ADC is always
+    # listed as option 1 because it's the safer choice (no key files on disk).
+    local default_choice=2
+    [[ "$default_method" == "adc" ]] && default_choice=1
 
-    read -r -p "Enter Google Cloud Region [Default=$gcp_location_default]: " gcp_location
-    gcp_location=${gcp_location:-$gcp_location_default}
-    if [[ ${gcp_regions[*]} =~ $gcp_location ]]; then
-    echo "export TF_VAR_region=${gcp_location}" >> .zsacrc
+    info "GCP authentication mode:"
+    if [[ "$default_choice" == "1" ]]; then
+        info "  1) adc      - Application Default Credentials (gcloud auth application-default login)  [default]"
+        info "  2) keyfile  - service account JSON key file"
+        info "Detected ADC file: $adc_file"
     else
-    echo "Invalid Google Cloud region name entered."
-    echo "Delete .zsacrc file and re-run zsec up..."
-    exit 1
+        info "  1) adc      - Application Default Credentials (gcloud auth application-default login)"
+        info "  2) keyfile  - service account JSON key file  [default]"
+    fi
+    local choice method
+    while true; do
+        read -r -p "  Choose [$default_choice]: " choice
+        choice="${choice:-$default_choice}"
+        case "${choice,,}" in
+            1|adc)     method=adc;     break ;;
+            2|keyfile) method=keyfile; break ;;
+            *) printf '    Invalid choice: %s. Pick 1 or 2.\n' "$choice" ;;
+        esac
+    done
+    info "GCP auth mode: $method"
+
+    if [[ "$method" == "keyfile" ]]; then
+        local gcp_credentials
+        gcp_credentials=$(ask "Google Cloud host project credential file path")
+        [[ -r "$gcp_credentials" ]] || die "GCP credentials file is not readable: $gcp_credentials"
+        {
+            printf 'export TF_VAR_credentials=%q\n' "$gcp_credentials"
+            # Make sure ADC env from a previous run is not left in place; the
+            # presence of GOOGLE_APPLICATION_CREDENTIALS would override our keyfile.
+            printf 'unset GOOGLE_APPLICATION_CREDENTIALS\n'
+            printf 'export ZSAC_GCP_AUTH=keyfile\n'
+        } >> .zsacrc
+    else
+        # ADC mode. Do NOT set TF_VAR_credentials (var.credentials defaults to
+        # null in versions.tf, which makes the google provider fall back to ADC).
+        if [[ -z "$adc_file" ]]; then
+            info "No ADC file detected. Run 'gcloud auth application-default login'"
+            info "before re-running this script. Continuing for now; terraform will"
+            info "fail with a clear credentials error if ADC is still missing."
+        fi
+        {
+            [[ -n "$adc_file" ]] && printf 'export GOOGLE_APPLICATION_CREDENTIALS=%q\n' "$adc_file"
+            # Wipe any leftover keyfile setting from a previous run.
+            printf 'unset TF_VAR_credentials\n'
+            printf 'export ZSAC_GCP_AUTH=adc\n'
+        } >> .zsacrc
     fi
 
-    zpa_cloud_default=PRODUCTION
-    while true; do
-        read -r -p "Enter ZPA Cloud Name (PRODUCTION, BETA, GOV, or PREVIEW) [Default=$zpa_cloud_default]: " zpa_cloud_input
-        zpa_cloud=${zpa_cloud_input:-$zpa_cloud_default}
-        case $zpa_cloud in
-        PROD*|prod*|PRODUCTION|production)
-          echo "ZPA Cloud selected: PRODUCTION"
-          echo "export ZPA_CLOUD=\"PRODUCTION\"" >> .zsacrc
-          break
-          ;;
-        BETA|beta|b|B)
-          echo "ZPA Cloud selected: BETA"
-          echo "export ZPA_CLOUD=\"BETA\"" >> .zsacrc
-          break
-          ;;
-        GOV|gov|g|G)
-          echo "ZPA Cloud selected: GOV"
-          echo "export ZPA_CLOUD=\"GOV\"" >> .zsacrc
-          break
-          ;;
-        PREVIEW|preview|pre*|PRE*)
-          echo "ZPA Cloud selected: PREVIEW"
-          echo "export ZPA_CLOUD=\"PREVIEW\"" >> .zsacrc
-          break
-          ;;
-          *)
-          echo "Invalid Cloud. Supported values are PRODUCTION, BETA, GOV, or PREVIEW: ${zpa_cloud}."
-      ;;
-        esac
-    done
-    read -r -p "Enter ZPA Client ID: " zpa_client_id
-    echo "export ZPA_CLIENT_ID='$zpa_client_id'" >> .zsacrc
-    read -r -p "Enter ZPA Client Secret: " zpa_client_secret
-    echo "export ZPA_CLIENT_SECRET='$zpa_client_secret'" >> .zsacrc
-    read -r -p "Enter ZPA Customer ID: " zpa_customer_id
-    echo "export ZPA_CUSTOMER_ID='$zpa_customer_id'" >> .zsacrc
+    # ----- project + region (always required regardless of auth method) --- #
+    project_id=$(ask "Google Cloud host project ID" "$project_id_default")
+    printf 'export TF_VAR_project=%q\n' "$project_id" >> .zsacrc
 
     while true; do
-        read -r -p "Do you already have an App Connector provisioning key to use? [yes/no] " prov_key_response
-        case $prov_key_response in 
-	    yes|y ) 
-        read -r -p "Enter the name of your existing App Connector provisioning key: " byo_provisioning_key_name
-        echo "export TF_VAR_byo_provisioning_key=true" >> .zsacrc
-        echo "export TF_VAR_byo_provisioning_key_name='$byo_provisioning_key_name'" >> .zsacrc
-        break
-        ;;
-	    no|n )
-        echo "Terraform will be creating a new App Connector Group and provisioning key"
-        echo "Before proceeding, make sure you have entered all variable requirements from steps 1 and 2 in $dtype/terraform.tfvars"
-        break
-        ;;
-	    * ) echo "invalid response. Please enter yes or no";;
-        esac
+        gcp_location=$(ask "Google Cloud region" "$gcp_location_default")
+        if is_valid_region "$gcp_location"; then
+            printf 'export TF_VAR_region=%q\n' "$gcp_location" >> .zsacrc
+            break
+        fi
+        printf '    Invalid Google Cloud region. See: https://cloud.google.com/about/locations\n'
     done
+}
 
+# OneAPI / Zidentity credential collection (preferred for migrated tenants).
+# Honors pre-set env vars: ZSCALER_CLIENT_ID, ZSCALER_CLIENT_SECRET,
+# ZSCALER_VANITY_DOMAIN, ZSCALER_CLOUD, ZPA_CUSTOMER_ID. Anything missing is
+# prompted for. Only "beta" is accepted as a non-empty zscaler_cloud value here.
+collect_zpa_oneapi_creds() {
+    local client_id client_secret vanity_domain zscaler_cloud customer_id
 
-    while [[ "$dtype" == "base"* && "$oper" == "up" ]]; do
-    clientpublicip=$(curl -s ifconfig.me)
-    echo "greenfield deployments include a publicly accessible ssh bastion host.."
-    read -r -p "Your current public IP is ${clientpublicip}. Lock SSH access to this IP? [yes/no] " bastion_response
-case $bastion_response in
-	yes|y )
-    echo "Updating Bastion NSG to permit SSH only from ${clientpublicip}: "
-    echo "export 'TF_VAR_bastion_ssh_allow_ip=[\"${clientpublicip}/32\"]'" >> .zsacrc
-    useclientip=true
-    break
-    ;;
-	no|n )
-    useclientip=false
-    break
-    ;;
-	* ) echo "invalid response. Please enter yes or no";;
-    esac
-done
+    client_id="${ZSCALER_CLIENT_ID:-}"
+    client_secret="${ZSCALER_CLIENT_SECRET:-}"
+    vanity_domain="${ZSCALER_VANITY_DOMAIN:-}"
+    zscaler_cloud="${ZSCALER_CLOUD:-}"
+    customer_id="${ZPA_CUSTOMER_ID:-}"
 
-if [[ "$useclientip" == "false" ]]; then
-while true; do
-read -r -p "Lock SSH access to a different IP address or range? \"no\" is open(0.0.0.0/0) [yes/no]: " changebastionip
-case $changebastionip in
-	yes|y )
-    read -r -p "Enter new IP Address or CIDR range (e.g. 2.2.2.2/32): " bastionipinput
-    echo "export 'TF_VAR_bastion_ssh_allow_ip=[\"${bastionipinput}\"]'" >> .zsacrc
+    [[ -n "$client_id" ]]     || client_id=$(ask "ZSCALER_CLIENT_ID")
+    [[ -n "$client_secret" ]] || client_secret=$(ask "ZSCALER_CLIENT_SECRET" "" secret)
+    [[ -n "$vanity_domain" ]] || vanity_domain=$(ask "ZSCALER_VANITY_DOMAIN (e.g. acme)")
+    [[ -n "$customer_id" ]]   || customer_id=$(ask "ZPA_CUSTOMER_ID")
 
-if [[ $bastionipinput =~ ^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/(3[0-2]|[1-2][0-9]|[1-9]))$ ]]
-    then
-    echo "$bastionipinput - IP/Netmask valid"
+    if [[ -z "$zscaler_cloud" ]]; then
+        if confirm "Use the Zscaler beta environment?" default-no; then
+            zscaler_cloud="beta"
+        fi
     else
-    echo "$bastionipinput is not valid IP CIDR format"
-    echo "Delete .zsacrc file and re-run zsec up..."
-    exit 1
-fi
-    break
-    ;;
-	no|n )
-    echo "SSH access permitted for all IP addresses..."
-    break
-    ;;
-	* ) echo "invalid response. Please enter yes or no";;
-    esac
-done
+        # Provider only accepts lowercase non-empty values; only "beta" is
+        # supported in this script per spec.
+        zscaler_cloud="${zscaler_cloud,,}"
+        if [[ -n "$zscaler_cloud" && "$zscaler_cloud" != "beta" ]]; then
+            die "ZSCALER_CLOUD must be unset or set to 'beta' (got: $zscaler_cloud)"
+        fi
+    fi
+
+    {
+        printf 'export ZSCALER_CLIENT_ID=%q\n' "$client_id"
+        printf 'export ZSCALER_CLIENT_SECRET=%q\n' "$client_secret"
+        printf 'export ZSCALER_VANITY_DOMAIN=%q\n' "$vanity_domain"
+        printf 'export ZPA_CUSTOMER_ID=%q\n' "$customer_id"
+        # Only emit ZSCALER_CLOUD when set, so the provider falls back to its
+        # default Zidentity environment when the user didn't pick beta.
+        [[ -n "$zscaler_cloud" ]] && printf 'export ZSCALER_CLOUD=%q\n' "$zscaler_cloud"
+        # Make sure the legacy switch isn't left over from a previous run.
+        printf 'unset ZSCALER_USE_LEGACY_CLIENT\n'
+        printf 'export ZSAC_AUTH_MODE=oneapi\n'
+    } >> .zsacrc
+}
+
+# Legacy ZPA credential collection. Honors pre-set env vars: ZPA_CLIENT_ID,
+# ZPA_CLIENT_SECRET, ZPA_CUSTOMER_ID, ZPA_CLOUD. Anything missing is prompted.
+# Always sets ZSCALER_USE_LEGACY_CLIENT=true so the provider routes to the
+# legacy client even on v4.0+.
+collect_zpa_legacy_creds() {
+    local zpa_client_id zpa_client_secret zpa_customer_id zpa_cloud
+
+    zpa_client_id="${ZPA_CLIENT_ID:-}"
+    zpa_client_secret="${ZPA_CLIENT_SECRET:-}"
+    zpa_customer_id="${ZPA_CUSTOMER_ID:-}"
+    zpa_cloud="${ZPA_CLOUD:-}"
+
+    [[ -n "$zpa_client_id" ]]     || zpa_client_id=$(ask "ZPA_CLIENT_ID")
+    [[ -n "$zpa_client_secret" ]] || zpa_client_secret=$(ask "ZPA_CLIENT_SECRET" "" secret)
+    [[ -n "$zpa_customer_id" ]]   || zpa_customer_id=$(ask "ZPA_CUSTOMER_ID")
+
+    if [[ -z "$zpa_cloud" ]]; then
+        local zpa_cloud_default=PRODUCTION
+        while true; do
+            local raw
+            raw=$(ask "ZPA cloud (PRODUCTION, BETA, GOV, GOVUS, PREVIEW, ZPATWO)" "$zpa_cloud_default")
+            case "${raw^^}" in
+                # Order matters: GOVUS must be matched before GOV* would catch it,
+                # and PROD* covers PRODUCTION.
+                GOVUS)        zpa_cloud="GOVUS"; break ;;
+                GOV|G)        zpa_cloud="GOV"; break ;;
+                PROD*)        zpa_cloud="PRODUCTION"; break ;;
+                BETA|B)       zpa_cloud="BETA"; break ;;
+                PRE*)         zpa_cloud="PREVIEW"; break ;;
+                ZPATWO)       zpa_cloud="ZPATWO"; break ;;
+                *) printf '    Invalid cloud: %s\n' "$raw" ;;
+            esac
+        done
+        info "ZPA cloud selected: $zpa_cloud"
+    fi
+
+    {
+        printf 'export ZPA_CLIENT_ID=%q\n' "$zpa_client_id"
+        printf 'export ZPA_CLIENT_SECRET=%q\n' "$zpa_client_secret"
+        printf 'export ZPA_CUSTOMER_ID=%q\n' "$zpa_customer_id"
+        printf 'export ZPA_CLOUD=%q\n' "$zpa_cloud"
+        printf 'export ZSCALER_USE_LEGACY_CLIENT=true\n'
+        # Make sure stale OneAPI env doesn't bleed in from a previous run.
+        printf 'unset ZSCALER_CLIENT_ID ZSCALER_CLIENT_SECRET ZSCALER_VANITY_DOMAIN ZSCALER_CLOUD\n'
+        printf 'export ZSAC_AUTH_MODE=legacy\n'
+    } >> .zsacrc
+}
+
+# Pick OneAPI vs Legacy. Defaults to OneAPI; explains the legacy use cases.
+collect_zpa_creds() {
+    info "ZPA authentication mode:"
+    info "  1) OneAPI / Zidentity   (recommended; required for tenants on Zidentity)  [default]"
+    info "  2) Legacy ZPA           (required for GOV/GOVUS or pre-Zidentity tenants)"
+    local choice mode
+    while true; do
+        read -r -p "  Choose [1]: " choice
+        choice="${choice:-1}"
+        case "${choice,,}" in
+            1|oneapi) mode=oneapi; break ;;
+            2|legacy) mode=legacy; break ;;
+            *) printf '    Invalid choice: %s. Pick 1 or 2.\n' "$choice" ;;
+        esac
+    done
+    info "ZPA auth mode: $mode"
+
+    if [[ "$mode" == "oneapi" ]]; then
+        collect_zpa_oneapi_creds
+    else
+        collect_zpa_legacy_creds
+    fi
+}
+
+info "Checking GCP environment variables and App Connector bootstrap requirements..."
+
+# If a .zsacrc already exists, source it so existing values populate the env.
+# The presence of BOTH new-format markers (ZSAC_GCP_AUTH from collect_gcp_creds,
+# ZSAC_AUTH_MODE from collect_zpa_creds) is what tells us the file was produced
+# by THIS version of the script and is complete enough to skip prompts. An rc
+# file without those markers (e.g. from a previous version, or written
+# partially because a prior run was interrupted) will trigger a full re-prompt.
+if [[ -e ./.zsacrc ]]; then
+    # shellcheck disable=SC1091
+    . ./.zsacrc
 fi
 
+if [[ -z "${ZSAC_GCP_AUTH:-}" || -z "${ZSAC_AUTH_MODE:-}" ]]; then
+    if [[ -e ./.zsacrc ]]; then
+        info "Existing .zsacrc is from an older version of this script (missing"
+        info "ZSAC_GCP_AUTH or ZSAC_AUTH_MODE). Archiving it and re-prompting."
+        local_now=$(date +'%Y-%m-%d-%H_%M_%S')
+        mv ./.zsacrc "./.zsacrc-stale-${local_now}"
+    fi
+    collect_gcp_creds
+    collect_zpa_creds
 
-# if .zsacrc is not present we'll assume that GCP env was never set
+    # ----------------------------------------------------------------------- #
+    # Bring-your-own provisioning key                                         #
+    # ----------------------------------------------------------------------- #
+    if confirm "Do you already have an App Connector provisioning key to use?" default-no; then
+        byo_provisioning_key_name=$(ask "Existing App Connector provisioning key name")
+        printf 'export TF_VAR_byo_provisioning_key=true\n' >> .zsacrc
+        printf 'export TF_VAR_byo_provisioning_key_name=%q\n' "$byo_provisioning_key_name" >> .zsacrc
+    else
+        info "Terraform will create a new App Connector group + provisioning key."
+        info "Make sure variables in $dtype/terraform.tfvars are populated."
+    fi
+
+    # ----------------------------------------------------------------------- #
+    # base_ac (greenfield) only: bastion SSH allow-list                       #
+    # ----------------------------------------------------------------------- #
+    if [[ "$dtype" == base* && "$oper" == "up" ]]; then
+        useclientip=false
+        # Prefer IPv4. GCP firewall source_ranges require /32 for IPv4 and
+        # /128 for IPv6; if we silently appended /32 to an IPv6 address the
+        # firewall API rejects it with "Must be a CIDR address range".
+        clientpublicip=$(curl -s -4 ifconfig.me 2>/dev/null || true)
+        clientpubliciptype="v4"
+        if [[ -z "$clientpublicip" ]]; then
+            clientpublicip=$(curl -s -6 ifconfig.me 2>/dev/null || true)
+            clientpubliciptype="v6"
+        fi
+
+        if [[ -n "$clientpublicip" ]] && \
+           confirm "Greenfield includes a public bastion. Lock SSH to your current IP ($clientpublicip)?" default-yes; then
+            if [[ "$clientpubliciptype" == "v6" ]]; then
+                clientpubliccidr="${clientpublicip}/128"
+            else
+                clientpubliccidr="${clientpublicip}/32"
+            fi
+            info "Updating bastion NSG to permit SSH only from ${clientpubliccidr}"
+            printf 'export TF_VAR_bastion_ssh_allow_ip=%q\n' "[\"${clientpubliccidr}\"]" >> .zsacrc
+            useclientip=true
+        fi
+
+        if [[ "$useclientip" == "false" ]]; then
+            if confirm "Lock SSH access to a different IP/CIDR?  (No = open to 0.0.0.0/0)" default-no; then
+                # Permissive validation: full IPv4-with-mask regex, or any
+                # token containing ":" plus a /<mask> (treated as IPv6). The
+                # bastion module re-validates and Google's firewall API will
+                # reject anything truly malformed at apply time.
+                v4_re='^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(/(3[0-2]|[1-2][0-9]|[1-9]))$'
+                v6_re='^[0-9A-Fa-f:]+/(12[0-8]|1[01][0-9]|[1-9][0-9]?)$'
+                while true; do
+                    bastionipinput=$(ask "New IP address or CIDR (IPv4 e.g. 2.2.2.2/32, IPv6 e.g. 2001:db8::1/128)")
+                    if [[ "$bastionipinput" =~ $v4_re ]] || [[ "$bastionipinput" =~ $v6_re ]]; then
+                        printf 'export TF_VAR_bastion_ssh_allow_ip=%q\n' "[\"${bastionipinput}\"]" >> .zsacrc
+                        ok "$bastionipinput - IP/Netmask valid"
+                        break
+                    fi
+                    fail "$bastionipinput is not a valid IPv4 (/1-/32) or IPv6 (/1-/128) CIDR"
+                done
+            else
+                info "SSH access will be permitted for all IP addresses (0.0.0.0/0)"
+            fi
+        fi
+    fi
+
+    # ----------------------------------------------------------------------- #
+    # AC VM type, AZ count, AC count                                          #
+    # ----------------------------------------------------------------------- #
+    if [[ "$oper" == "up" ]]; then
+        local_acvm_default="n2-standard-4"
+        info "Full GCP VM type list: https://cloud.google.com/compute/docs/machine-resource"
+        info "Supported by this script: n2-standard-4, n2-highcpu-4, n2-standard-8, n2-highcpu-8, n1-standard-4, n1-highcpu-4, n1-standard-8, n1-highcpu-8"
+        while true; do
+            acvm_instance_type=$(ask "Desired GCP VM type for AC" "$local_acvm_default")
+            case "$acvm_instance_type" in
+                n2-standard-4|n2-highcpu-4|n2-standard-8|n2-highcpu-8|n1-standard-4|n1-highcpu-4|n1-standard-8|n1-highcpu-8)
+                    info "App Connector VM type: $acvm_instance_type"
+                    printf 'export TF_VAR_acvm_instance_type=%q\n' "$acvm_instance_type" >> .zsacrc
+                    break
+                    ;;
+                *) fail "Invalid VM type: $acvm_instance_type" ;;
+            esac
+        done
+
+        az_count=$(ask "How many availability zone subnets to deploy across? (1-3)" "2")
+        if (( az_count >= 1 && az_count <= 3 )); then
+            info "$dtype will deploy across $az_count zonal instance groups."
+            printf 'export TF_VAR_az_count=%d\n' "$az_count" >> .zsacrc
+        else
+            die "Invalid az_count: $az_count (must be 1-3). Delete .zsacrc and re-run."
+        fi
+
+        # ------------------------------------------------------------------- #
+        # Sizing: fixed deploys want ac_count; ASG deploys want min/max +     #
+        # target-tracking metric + target value. Variables are namespaced     #
+        # to match the underlying Terraform variables in each example.        #
+        # ------------------------------------------------------------------- #
+        if [[ "$dtype" == *_asg ]]; then
+            min_size=$(ask "Autoscaling min instances per zone? (1-10)" "2")
+            if (( min_size >= 1 && min_size <= 10 )); then
+                printf 'export TF_VAR_min_size=%d\n' "$min_size" >> .zsacrc
+            else
+                die "Invalid min_size: $min_size (must be 1-10). Delete .zsacrc and re-run."
+            fi
+
+            max_size=$(ask "Autoscaling max instances per zone? (>= min_size, max 10)" "4")
+            if (( max_size >= min_size && max_size <= 10 )); then
+                info "$dtype will scale between $min_size and $max_size instances per zone (across $az_count zones)."
+                printf 'export TF_VAR_max_size=%d\n' "$max_size" >> .zsacrc
+            else
+                die "Invalid max_size: $max_size (must be between $min_size and 10). Delete .zsacrc and re-run."
+            fi
+
+            info "Target-tracking metric:"
+            info "  1) ASGAverageCPUUtilization   (recommended)  [default]"
+            info "  2) ASGAverageNetworkIn"
+            info "  3) ASGAverageNetworkOut"
+            while true; do
+                read -r -p "  Choose [1]: " metric_choice
+                metric_choice="${metric_choice:-1}"
+                case "$metric_choice" in
+                    1|ASGAverageCPUUtilization) target_metric=ASGAverageCPUUtilization; break ;;
+                    2|ASGAverageNetworkIn)      target_metric=ASGAverageNetworkIn;      break ;;
+                    3|ASGAverageNetworkOut)     target_metric=ASGAverageNetworkOut;     break ;;
+                    *) printf '    Invalid choice: %s. Pick 1, 2, or 3.\n' "$metric_choice" ;;
+                esac
+            done
+            printf 'export TF_VAR_target_tracking_metric=%q\n' "$target_metric" >> .zsacrc
+
+            if [[ "$target_metric" == ASGAverageCPUUtilization ]]; then
+                target_value=$(ask "Target CPU utilization percentage? (1-100)" "50")
+                if (( target_value >= 1 && target_value <= 100 )); then
+                    printf 'export TF_VAR_target_cpu_util_value=%d\n' "$target_value" >> .zsacrc
+                else
+                    die "Invalid target_cpu_util_value: $target_value (must be 1-100). Delete .zsacrc and re-run."
+                fi
+            else
+                target_value=$(ask "Target bytes-per-second per instance? (positive integer)" "10000000")
+                if (( target_value > 0 )); then
+                    printf 'export TF_VAR_target_cpu_util_value=%d\n' "$target_value" >> .zsacrc
+                else
+                    die "Invalid target_cpu_util_value: $target_value (must be a positive integer). Delete .zsacrc and re-run."
+                fi
+            fi
+            info "Autoscaling: metric=$target_metric, target=$target_value"
+        else
+            ac_count=$(ask "How many App Connectors per zone? (1-10)" "2")
+            if (( ac_count >= 1 && ac_count <= 10 )); then
+                info "$dtype will deploy $ac_count App Connectors per zone (across $az_count zones)."
+                printf 'export TF_VAR_ac_count=%d\n' "$ac_count" >> .zsacrc
+            else
+                die "Invalid ac_count: $ac_count (must be 1-10). Delete .zsacrc and re-run."
+            fi
+        fi
+
+        # ------------------------------------------------------------------- #
+        # Brownfield (ac, ac_asg) only: BYO-VPC / subnet / router / NAT       #
+        # ------------------------------------------------------------------- #
+        if [[ "$dtype" == ac* ]]; then
+            info "Configuring networking infrastructure..."
+            byo_vpc=false
+            byo_subnets=false
+
+            if confirm "Are you deploying to an existing VPC network?" default-no; then
+                byo_vpc=true
+                printf 'export TF_VAR_byo_vpc=true\n' >> .zsacrc
+                vpc_name=$(ask "Existing VPC name (e.g. vpc-ac)")
+                printf 'export TF_VAR_byo_vpc_name=%q\n' "$vpc_name" >> .zsacrc
+            else
+                info "Terraform will create a new VPC + subnet, Cloud Router, and NAT Gateway."
+                printf 'export TF_VAR_byo_vpc=false\n' >> .zsacrc
+            fi
+
+            if [[ "$byo_vpc" == "true" ]]; then
+                if confirm "Are you deploying to existing subnets in that VPC?" default-no; then
+                    printf 'export TF_VAR_byo_subnets=true\n' >> .zsacrc
+                    ac_subnet=$(ask "VPC subnet name (e.g. shared-vpc-subnet-ac)")
+                    printf 'export TF_VAR_byo_subnet_name=%q\n' "$ac_subnet" >> .zsacrc
+                else
+                    printf 'export TF_VAR_byo_subnets=false\n' >> .zsacrc
+                    byo_subnets=false
+                fi
+
+                if [[ "$byo_subnets" == "false" ]]; then
+                    subnet_ac_default="10.0.1.0/24"
+                    info "By default, Terraform will create a new subnet with CIDR $subnet_ac_default."
+                    if confirm "Manually define the AC subnet CIDR instead?" default-no; then
+                        custom_ac_subnet=$(ask "AC VPC subnet CIDR (e.g. 10.2.0.0/24)")
+                        printf 'export TF_VAR_subnet_ac=%q\n' "$custom_ac_subnet" >> .zsacrc
+                    fi
+                fi
+
+                if confirm "Does your VPC already have a Cloud Router associated?" default-no; then
+                    printf 'export TF_VAR_byo_router=true\n' >> .zsacrc
+                    byo_router_name=$(ask "Existing Cloud Router name (e.g. shared-vpc-router)")
+                    printf 'export TF_VAR_byo_router_name=%q\n' "$byo_router_name" >> .zsacrc
+                else
+                    printf 'export TF_VAR_byo_router=false\n' >> .zsacrc
+                fi
+
+                if confirm "Does your VPC already have a NAT Gateway associated?" default-no; then
+                    printf 'export TF_VAR_byo_natgw=true\n' >> .zsacrc
+                    byo_natgw_name=$(ask "Existing Cloud NAT name (e.g. shared-vpc-nat)")
+                    printf 'export TF_VAR_byo_natgw_name=%q\n' "$byo_natgw_name" >> .zsacrc
+                else
+                    printf 'export TF_VAR_byo_natgw=false\n' >> .zsacrc
+                fi
+            fi
+        fi
+    fi
+fi
+
+# Add local bin directory to PATH for terraform invocation.
+if ! grep -Fxq "export PATH=\${PATH}:\${PWD}/bin" .zsacrc 2>/dev/null; then
+    # The literal ${PATH} and ${PWD} are intentional: this string is written
+    # INTO .zsacrc and expanded only when that rc file is later sourced.
+    # shellcheck disable=SC2016
+    printf 'export PATH=${PATH}:${PWD}/bin\n' >> .zsacrc
+fi
+
+# Persist deployment type for future runs.
 if [[ "$oper" == "up" ]]; then
-acvm_instance_type_default="n2-standard-4"
-while true; do
-    echo "Full GCP VM Type List: https://cloud.google.com/compute/docs/machine-resource"
-    echo "This script supports: n2-standard-4, n2-highcpu-4, n2-standard-8, n2-highcpu-8, n1-standard-4, n1-highcpu-4, n1-standard-8, and n1-highcpu-8"
-    read -r -p "Enter desired GCP VM type for AC (e.g. n2-standard-2 or e2-standard-2):  [Default=$acvm_instance_type_default]: " acvm_instance_type_input
-acvm_instance_type=${acvm_instance_type_input:-$acvm_instance_type_default}
-case $acvm_instance_type in
-	n2-standard-4|n2-highcpu-4|n2-standard-8|n2-highcpu-8|n1-standard-4|n1-highcpu-4|n1-standard-8|n1-highcpu-8)
-    echo "App Connector VM type: ${acvm_instance_type}"
-    echo "export TF_VAR_acvm_instance_type=${acvm_instance_type}" >> .zsacrc
-    break
-    ;;
-	*)
-    echo "Invalid App Connector VM type: ${acvm_instance_type}. Please enter an approved VM type"
-    esac
-done
-
-
-az_count_default=2
-    read -r -p "Enter how many Availability Zone subnets [1-3] to deploy across? [Default=$az_count_default]: " az_count_input
-az_count=${az_count_input:-$az_count_default}
-if ((az_count >= 1 && az_count <= 3)); then
-    echo "$dtype will deploy App Connectors across $az_count Zonal Instance Groups in $gcp_location"
-    echo "export TF_VAR_az_count=$az_count" >> .zsacrc
-else
-    echo "invalid az_count value. Must be a number between 1 and 3"
-    echo "Delete .zsacrc file and re-run zsec up..."
-    exit 1
-fi  
-
-ac_count_default=2
-    echo "You have selected $az_count zones to deploy ACs"
-    read -p "Enter how many App Connectors to deploy in each zone? [Default=$ac_count_default]: " ac_count_input
-ac_count=${ac_count_input:-$ac_count_default}
-if ((ac_count >= 1 && ac_count <= 10)); then
-    echo "$dtype will deploy $ac_count App Connectors in each [$az_count] Zonal Instance Groups in $gcp_location"
-    echo "export TF_VAR_ac_count=$ac_count" >> .zsacrc
-else
-    echo "invalid ac_count value. Must be a number between 1 and 20"
-    echo "Delete .zsacrc file and re-run zsec up..."
-    exit 1
-fi  
-
-
-if [[ "$dtype" == "ac"* ]]; then
-    echo "Configure Networking Infrastructure..."
-    while true; do
-    read -r -p "Are you deploying to existing VPC Networks in $project_id? (yes/no): " byo_vpc_response
-        case $byo_vpc_response in 
-	yes|y ) 
-    echo "Using an existing VPC..."
-    echo "export TF_VAR_byo_vpc=true" >> .zsacrc
-    byo_vpc=true
-    read -r -p "Enter existing VPC name (E.g vpc-ac): " byo_vpc
-    echo "You entered $byo_vpc"
-    echo "export TF_VAR_byo_vpc_name=$byo_vpc" >> .zsacrc
-    break
-    ;;
-	no|n )
-    echo "Terraform will create new VPC + Subnet, Cloud Router, and NAT Gateway for App Connectors..."
-    echo "export TF_VAR_byo_vpc=false" >> .zsacrc
-    break
-    ;;
-	* ) echo "invalid response. Please enter yes or no";;
-        esac
-    done
+    info "Updating .zsacrc with dtype=$dtype"
+    sed -i'' -e '/^export dtype=/d' .zsacrc 2>/dev/null || true
+    printf 'export dtype=%q\n' "$dtype" >> .zsacrc
 fi
 
-# Query for existing subnet IDs if byo_vpc true
-if [[ "$byo_vpc" == "true" ]]; then
-    echo "Attemping deployment to existing VPCs..."
-    while true; do
-    read -r -p "Are you deploying to existing subnets in each VPC? (yes/no): " byo_subnet_response
-    case $byo_subnet_response in 
-	yes|y ) 
-    echo "Using existing subnets for App Connector..."
-    echo "export TF_VAR_byo_subnets=true" >> .zsacrc
-    read -r -p "Please enter the VPC subnet name (E.g shared-vpc-subnet-ac): " ac_subnet
-    echo "You entered $ac_subnet"
-    echo "export TF_VAR_byo_subnet_name=$ac_subnet" >> .zsacrc
-    break
-    ;;
-	no|n )
-    echo "Terraform will attempt to create a new subnet in $byo_vpc"
-    echo "export TF_VAR_byo_subnets=false" >> .zsacrc
-    byo_subnets=false
-    break
-    ;;
-	* ) echo "invalid response. Please enter yes or no";;
-        esac
-    done
-fi
-
-
-#Query for subnet creation range override
-if [[ "$byo_subnets" == "false" ]]; then
-subnet_ac_default="10.0.1.0/24"
-    echo "Existing VPCs selected, but subnets need created..."
-    echo "By default, Terraform will create a new Subnet with a CIDR range of $subnet_ac_default"
-    while true; do
-    read -r -p "Do you want to manually define the AC subnet CIDR range instead? (yes/no): " change_ac_cidr_response
-    case $change_ac_cidr_response in 
-	yes|y )
-    echo "Configuring App Connector subnet range..."
-    read -r -p "Please enter the AC VPC subnet CIDR (E.g 10.2.0.0/24): " custom_ac_subnet
-    echo "You entered $custom_ac_subnet"
-    echo "export TF_VAR_subnet_ac='$custom_ac_subnet'"
-    break
-    ;;
-	no|n )
-    echo "Terraform will attempt to automatically create a new subnet in $byo_vpc"
-    break
-    ;;
-	* ) echo "invalid response. Please enter yes or no";;
-        esac
-    done 
-fi
-
-# Query for existing Cloud Routers if byo_vpc true
-if [[ "$byo_vpc" == "true" ]]; then
-    while true; do
-    read -r -p "Does your VPC already have a Cloud Router associated? (yes/no): " byo_router_response
-        case $byo_router_response in 
-	yes|y ) 
-    echo "Using existing Cloud Routers..."
-    echo "export TF_VAR_byo_router=true" >> .zsacrc
-    byo_router=true
-    read -r -p "Enter existing VPC Cloud Router name (E.g shared-vpc-router): " byo_router_name
-    echo "export TF_VAR_byo_router_name=$byo_router_name" >> .zsacrc
-    break
-    ;;
-	no|n )
-    echo "Terraform will attempt to create a new Cloud Routers in $byo_vpc"
-    echo "export TF_VAR_byo_router=false" >> .zsacrc
-    break
-    ;;
-	* ) echo "invalid response. Please enter yes or no";;
-        esac
-    done
-fi
-
-# Query for existing Cloud NAT Gateways if byo_vpc true
-if [[ "$byo_vpc" == "true" ]]; then
-    while true; do
-    read -r -p "Does VPC already have a NAT Gateway associated? (yes/no): " byo_ngw_response
-    case $byo_ngw_response in 
-	yes|y ) 
-    echo "Using existing NAT Gateway for App Connector connectivity..."
-    echo "export TF_VAR_byo_natgw=true" >> .zsacrc
-    read -r -p "Enter existing VPC Cloud NAT name (E.g shared-vpc-nat): " byo_natgw_name
-    echo "export TF_VAR_byo_natgw_name=$byo_natgw_name" >> .zsacrc
-    break
-    ;;
-	no|n )
-    echo "Terraform will attempt to create a new NAT Gateway resource in $byo_vpc"
-    echo "export TF_VAR_byo_natgw=false" >> .zsacrc
-    break
-    ;;
-	* ) echo "invalid response. Please enter yes or no";;
-        esac
-    done
-fi
-
-fi
-fi
-
-
- #add local bin directory to PATH
-if ! grep -Fxq "export PATH=\${PATH}:\${PWD}/bin" .zsacrc; then
-    echo 'export PATH=${PATH}:${PWD}/bin' >> .zsacrc
-fi
-
-# add deployment type to .zsacrc for future runs
-if [[ "$oper" == "up" ]]; then
-    echo "Updating .zsacrc with dtype of $dtype"
-    sed -i'' -e '/dtype/d' .zsacrc
-    echo "export dtype=${dtype}" >> .zsacrc
-fi
-
-# initialize environment variables
-
+# --------------------------------------------------------------------------- #
+# Source the rc file and validate                                             #
+# --------------------------------------------------------------------------- #
+# shellcheck disable=SC1091
 . ./.zsacrc
 
-# check for valid environment variables in .zsacrc
-if [ -z "$TF_VAR_credentials" ] || [ -z "$TF_VAR_project" ]; then
-    echo "GCP Access info is missing. Remove .zsacrc file and rerun $0 $1"
-    exit 1
+rc_path="$(pwd)/.zsacrc"
+
+if [[ -z "${TF_VAR_project:-}" || -z "${TF_VAR_region:-}" ]]; then
+    die "GCP project/region missing in $rc_path. Run: rm $rc_path && $0 $1"
 fi
 
-if [[ $dtype != "base" ]]; then
-    echo "Checking App Connector provisioning info"
-  if [ -z "$TF_VAR_acvm_instance_type" ]; then
-    echo "App Connector provisioning info is missing. Remove .zsacrc file and rerun $0 $1"
-    exit 1
-  fi
+case "${ZSAC_GCP_AUTH:-}" in
+    keyfile)
+        [[ -n "${TF_VAR_credentials:-}" && -r "${TF_VAR_credentials}" ]] || \
+            die "GCP keyfile auth selected but TF_VAR_credentials is missing or not readable. Run: rm $rc_path && $0 $1"
+        ;;
+    adc)
+        # ADC mode: the google provider will discover ADC at apply time. We
+        # only check that *something* is in the discovery chain so the user
+        # gets a friendly error here rather than a cryptic one from the
+        # provider mid-plan.
+        if [[ -z "${GOOGLE_APPLICATION_CREDENTIALS:-}" && \
+              ! -r "$HOME/.config/gcloud/application_default_credentials.json" ]]; then
+            die "GCP ADC auth selected but no ADC was found. Run 'gcloud auth application-default login' and re-run, or run: rm $rc_path && $0 $1 (to switch to keyfile)."
+        fi
+        ;;
+    *)
+        die "Unknown or missing ZSAC_GCP_AUTH in $rc_path. Run: rm $rc_path && $0 $1"
+        ;;
+esac
+
+case "${ZSAC_AUTH_MODE:-}" in
+    oneapi)
+        for v in ZSCALER_CLIENT_ID ZSCALER_CLIENT_SECRET ZSCALER_VANITY_DOMAIN ZPA_CUSTOMER_ID; do
+            [[ -n "${!v:-}" ]] || die "OneAPI mode selected but $v is not set. Run: rm $rc_path && $0 $1"
+        done
+        ;;
+    legacy)
+        for v in ZPA_CLIENT_ID ZPA_CLIENT_SECRET ZPA_CUSTOMER_ID ZPA_CLOUD ZSCALER_USE_LEGACY_CLIENT; do
+            [[ -n "${!v:-}" ]] || die "Legacy mode selected but $v is not set. Run: rm $rc_path && $0 $1"
+        done
+        ;;
+    *)
+        die "Unknown or missing ZSAC_AUTH_MODE in $rc_path. Run: rm $rc_path && $0 $1"
+        ;;
+esac
+
+if [[ "${dtype:-}" != "base"* ]]; then
+    info "Checking App Connector provisioning info..."
+    [[ -n "${TF_VAR_acvm_instance_type:-}" ]] || \
+        die "App Connector provisioning info missing in $rc_path. Run: rm $rc_path && $0 $1"
 fi
 
-echo "Download terraform binary for $ostype if not present..."
-if [[ ! -e ./$dir/terraform ]]; then
-    curl -o ./$dir/terraform_${tversion}_${arch}.zip https://releases.hashicorp.com/terraform/$tversion/terraform_${tversion}_${os_str}_${arch}.zip
-    unzip ./$dir/terraform_${tversion}_${arch}.zip -d ./$dir
-    rm -f ./$dir/terraform_${tversion}_${arch}.zip
+# --------------------------------------------------------------------------- #
+# Download terraform binary                                                   #
+# --------------------------------------------------------------------------- #
+info "Downloading terraform $tversion for $ostype if not present..."
+if [[ ! -e "./$dir/terraform" ]]; then
+    curl -fsSL -o "./$dir/terraform_${tversion}_${arch}.zip" \
+        "https://releases.hashicorp.com/terraform/$tversion/terraform_${tversion}_${os_str}_${arch}.zip"
+    unzip -q "./$dir/terraform_${tversion}_${arch}.zip" -d "./$dir"
+    rm -f "./$dir/terraform_${tversion}_${arch}.zip"
 fi
 
-if [[ "$oper" == "do" ]]; then
-    exit 1
-fi
-
+# --------------------------------------------------------------------------- #
+# Run terraform                                                               #
+# --------------------------------------------------------------------------- #
 if [[ "$oper" == "up" ]]; then
-    echo "Bringing up App Connector cluster..."
-    TF_DATA_DIR=./.terraform ./$dir/terraform -chdir="$dtype" init
-    if [[ "$AUTO_APPROVE" ]]; then
-        TF_DATA_DIR=./.terraform ./$dir/terraform -chdir="$dtype" apply -auto-approve
+    info "Bringing up App Connector cluster..."
+    TF_DATA_DIR=./.terraform "./$dir/terraform" -chdir="$dtype" init
+    if [[ -n "${AUTO_APPROVE:-}" ]]; then
+        TF_DATA_DIR=./.terraform "./$dir/terraform" -chdir="$dtype" apply -auto-approve
     else
-        TF_DATA_DIR=./.terraform ./$dir/terraform -chdir="$dtype" apply
+        TF_DATA_DIR=./.terraform "./$dir/terraform" -chdir="$dtype" apply
+    fi
+elif [[ "$oper" == "destroy" ]]; then
+    info "Destroying App Connector cluster..."
+    TF_DATA_DIR=./.terraform "./$dir/terraform" -chdir="$dtype" init
+    if [[ -n "${AUTO_APPROVE:-}" ]]; then
+        TF_DATA_DIR=./.terraform "./$dir/terraform" -chdir="$dtype" destroy -auto-approve
+    else
+        TF_DATA_DIR=./.terraform "./$dir/terraform" -chdir="$dtype" destroy
     fi
 
-elif [[ "$oper" == "destroy" ]]; then
-    echo "Destroying App Connector cluster..."
-    TF_DATA_DIR=./.terraform ./$dir/terraform -chdir="$dtype" init
-    if [[ "$AUTO_APPROVE" ]]; then
-        TF_DATA_DIR=./.terraform ./$dir/terraform -chdir="$dtype" destroy -auto-approve
-    else
-      TF_DATA_DIR=./.terraform ./$dir/terraform -chdir="$dtype" destroy
-    fi
-    echo "Removing Terraform files and directories..."
+    info "Removing Terraform files and directories..."
     rm -rf bin
-    rm -rf $dtype/terraform.tfstate*
-    rm -rf **/.terraform/* && rm -rf **/.terraform*
+    rm -rf "$dtype/terraform.tfstate"*
+    rm -rf ./**/.terraform/* 2>/dev/null || true
+    rm -rf ./**/.terraform* 2>/dev/null || true
     find . -type f -name '.terraform.lock.hcl' -delete
-    rm -rf .terraform* && rm -f terraform.tfstate*
-    rm -f *.pem && rm -f *.pem.pub
-    rm -f name_prefix random_string
-    rm -rf user.key user.crt
-    rm -rf systems.json setup-*.tar
-    rm -rf **/errorlog.txt
-now=$(date +'%Y-%m-%d-%H_%M_%S')
-    echo "archiving .zsacrc file to .zsacrc-${now}"
-    cp .zsacrc .zsacrc-${now}
-    rm -rf .zsacrc && rm -rf .zsacrc.bak
+    rm -rf ./.terraform* ./terraform.tfstate*
+    rm -f ./*.pem ./*.pem.pub
+    rm -f ./name_prefix ./random_string
+    rm -rf ./user.key ./user.crt
+    rm -rf ./systems.json ./setup-*.tar
+    rm -rf ./**/errorlog.txt 2>/dev/null || true
+
+    now=$(date +'%Y-%m-%d-%H_%M_%S')
+    info "Archiving .zsacrc to .zsacrc-${now}"
+    cp .zsacrc ".zsacrc-${now}"
+    rm -f .zsacrc .zsacrc.bak
 fi

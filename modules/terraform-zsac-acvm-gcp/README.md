@@ -14,17 +14,17 @@ Zscaler recommends deploying App Connectors via consistent/reusable templates wi
 ## Requirements
 
 | Name | Version |
-|------|---------|
+| ---- | ------- |
 | <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) | >= 0.13.7, < 2.0.0 |
-| <a name="requirement_google"></a> [google](#requirement\_google) | ~> 6.4.0 |
-| <a name="requirement_local"></a> [local](#requirement\_local) | ~> 2.5.0 |
+| <a name="requirement_google"></a> [google](#requirement\_google) | ~> 7.31.0 |
+| <a name="requirement_local"></a> [local](#requirement\_local) | ~> 2.8.0 |
 | <a name="requirement_time"></a> [time](#requirement\_time) | ~> 0.12.0 |
 
 ## Providers
 
 | Name | Version |
-|------|---------|
-| <a name="provider_google"></a> [google](#provider\_google) | ~> 6.4.0 |
+| ---- | ------- |
+| <a name="provider_google"></a> [google](#provider\_google) | ~> 7.31.0 |
 | <a name="provider_time"></a> [time](#provider\_time) | ~> 0.12.0 |
 
 ## Modules
@@ -34,7 +34,7 @@ No modules.
 ## Resources
 
 | Name | Type |
-|------|------|
+| ---- | ---- |
 | [google_compute_instance_group_manager.ac_instance_group_manager](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/compute_instance_group_manager) | resource |
 | [google_compute_instance_template.ac_instance_template](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/compute_instance_template) | resource |
 | [time_sleep.wait_60_seconds](https://registry.terraform.io/providers/hashicorp/time/latest/docs/resources/sleep) | resource |
@@ -44,7 +44,7 @@ No modules.
 ## Inputs
 
 | Name | Description | Type | Default | Required |
-|------|-------------|------|---------|:--------:|
+| ---- | ----------- | ---- | ------- | :------: |
 | <a name="input_ac_count"></a> [ac\_count](#input\_ac\_count) | Default number of App Connector appliances to create | `number` | `1` | no |
 | <a name="input_acvm_instance_type"></a> [acvm\_instance\_type](#input\_acvm\_instance\_type) | App Connector Instance Type | `string` | `"n2-standard-4"` | no |
 | <a name="input_acvm_vpc_subnetwork"></a> [acvm\_vpc\_subnetwork](#input\_acvm\_vpc\_subnetwork) | VPC subnetwork for AC VM MGMT | `string` | n/a | yes |
@@ -65,7 +65,7 @@ No modules.
 ## Outputs
 
 | Name | Description |
-|------|-------------|
+| ---- | ----------- |
 | <a name="output_ac_instance"></a> [ac\_instance](#output\_ac\_instance) | App Connector VM name |
 | <a name="output_ac_private_ip"></a> [ac\_private\_ip](#output\_ac\_private\_ip) | App Connector VM internal forwarding IP |
 | <a name="output_instance_group_ids"></a> [instance\_group\_ids](#output\_instance\_group\_ids) | Name for Instance Groups |

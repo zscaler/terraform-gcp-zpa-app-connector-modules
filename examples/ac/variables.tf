@@ -14,7 +14,8 @@ variable "name_prefix" {
 
 variable "credentials" {
   type        = string
-  description = "Path to the service account json file for terraform to authenticate to Google Cloud"
+  description = "Optional path to a Google Cloud service account JSON key file. Leave unset (null) to fall back to Application Default Credentials (ADC), e.g. `gcloud auth application-default login` or a workload identity. The variable is also satisfied by the `GOOGLE_CREDENTIALS` env var read directly by the google provider."
+  default     = null
 }
 
 variable "project" {
@@ -119,19 +120,6 @@ variable "byo_provisioning_key_name" {
   default     = "provisioning-key-tf"
 }
 
-variable "enrollment_cert" {
-  type        = string
-  description = "Get name of ZPA enrollment cert to be used for App Connector provisioning"
-  default     = "Connector"
-
-  validation {
-    condition = (
-      var.enrollment_cert == "Connector"
-    )
-    error_message = "Input enrollment_cert must be set to an approved value."
-  }
-}
-
 variable "app_connector_group_description" {
   type        = string
   description = "Optional: Description of the App Connector Group"
@@ -184,21 +172,6 @@ variable "app_connector_group_override_version_profile" {
   type        = bool
   description = "Optional: Whether the default version profile of the App Connector Group is applied or overridden. Default: false"
   default     = true
-}
-
-variable "app_connector_group_version_profile_id" {
-  type        = string
-  description = "Optional: ID of the version profile. To learn more, see Version Profile Use Cases. https://help.zscaler.com/zpa/configuring-version-profile"
-  default     = "2"
-
-  validation {
-    condition = (
-      var.app_connector_group_version_profile_id == "0" || #Default = 0
-      var.app_connector_group_version_profile_id == "1" || #Previous Default = 1
-      var.app_connector_group_version_profile_id == "2"    #New Release = 2
-    )
-    error_message = "Input app_connector_group_version_profile_id must be set to an approved value."
-  }
 }
 
 variable "app_connector_group_dns_query_type" {

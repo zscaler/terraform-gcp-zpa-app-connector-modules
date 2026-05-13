@@ -7,15 +7,15 @@ This module has multi-purpose use and is leveraged by all other Zscaler App Conn
 ## Requirements
 
 | Name | Version |
-|------|---------|
+| ---- | ------- |
 | <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) | >= 0.13.7, < 2.0.0 |
-| <a name="requirement_google"></a> [google](#requirement\_google) | ~> 6.4.0 |
+| <a name="requirement_google"></a> [google](#requirement\_google) | ~> 7.31.0 |
 
 ## Providers
 
 | Name | Version |
-|------|---------|
-| <a name="provider_google"></a> [google](#provider\_google) | ~> 6.4.0 |
+| ---- | ------- |
+| <a name="provider_google"></a> [google](#provider\_google) | ~> 7.31.0 |
 
 ## Modules
 
@@ -24,8 +24,9 @@ No modules.
 ## Resources
 
 | Name | Type |
-|------|------|
-| [google_compute_firewall.ac_mgmt](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/compute_firewall) | resource |
+| ---- | ---- |
+| [google_compute_firewall.ac_mgmt_v4](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/compute_firewall) | resource |
+| [google_compute_firewall.ac_mgmt_v6](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/compute_firewall) | resource |
 | [google_compute_network.vpc_network](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/compute_network) | resource |
 | [google_compute_router.vpc_router](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/compute_router) | resource |
 | [google_compute_router_nat.vpc_nat_gateway](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/compute_router_nat) | resource |
@@ -39,9 +40,9 @@ No modules.
 ## Inputs
 
 | Name | Description | Type | Default | Required |
-|------|-------------|------|---------|:--------:|
+| ---- | ----------- | ---- | ------- | :------: |
 | <a name="input_allowed_ports"></a> [allowed\_ports](#input\_allowed\_ports) | A list of ports to permit inbound to App Connector. Default empty list means to allow all. | `list(string)` | `[]` | no |
-| <a name="input_allowed_ssh_from_internal_cidr"></a> [allowed\_ssh\_from\_internal\_cidr](#input\_allowed\_ssh\_from\_internal\_cidr) | CIDR allowed to ssh the bastion host from Intranet | `list(string)` | n/a | yes |
+| <a name="input_allowed_ssh_from_internal_cidr"></a> [allowed\_ssh\_from\_internal\_cidr](#input\_allowed\_ssh\_from\_internal\_cidr) | CIDR ranges allowed to access the App Connector management interface from the intranet. Both IPv4 and IPv6 are accepted; the module splits them into two firewall rules because GCP does not allow mixed-family source\_ranges in a single rule. NOTE: IPv6 host addresses MUST use /128, not /32 — /32 is only valid for IPv4. | `list(string)` | n/a | yes |
 | <a name="input_bastion_enabled"></a> [bastion\_enabled](#input\_bastion\_enabled) | Configure bastion subnet in Management VPC for SSH access to App Connector if set to true | `bool` | `false` | no |
 | <a name="input_byo_natgw"></a> [byo\_natgw](#input\_byo\_natgw) | Bring your own GCP NAT Gateway App Connector | `bool` | `false` | no |
 | <a name="input_byo_natgw_name"></a> [byo\_natgw\_name](#input\_byo\_natgw\_name) | User provided existing GCP NAT Gateway friendly name | `string` | `null` | no |
@@ -62,7 +63,7 @@ No modules.
 ## Outputs
 
 | Name | Description |
-|------|-------------|
+| ---- | ----------- |
 | <a name="output_ac_subnet"></a> [ac\_subnet](#output\_ac\_subnet) | App Connector VPC Subnetwork ID |
 | <a name="output_bastion_subnet"></a> [bastion\_subnet](#output\_bastion\_subnet) | Subnet for the bastion host |
 | <a name="output_vpc_nat_gateway"></a> [vpc\_nat\_gateway](#output\_vpc\_nat\_gateway) | App Connector VPC Cloud NAT Gateway ID |

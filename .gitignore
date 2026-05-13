@@ -24,6 +24,13 @@ system-*.tar
 # Crash log files
 crash.log
 
+# Local debug / runtime logs (never commit; they leak provisioning keys, tokens, etc.)
+*.log
+!CHANGELOG.md.log  # keep typed CHANGELOG-style files
+precommit.log
+terraform.log
+github_debug.log
+
 # Ignore any .tfvars files that are generated automatically for each Terraform run. Most
 # .tfvars files are managed as part of configuration and so should be included in
 # version control.

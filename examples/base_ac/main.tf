@@ -60,9 +60,12 @@ module "bastion" {
   bastion_ssh_allow_ip = var.bastion_ssh_allow_ip
 }
 
-
 ################################################################################
 # 3. Create ZPA App Connector Group
+#
+# The "Connector" enrollment certificate is now looked up internally by this
+# module via a hardcoded `data "zpa_enrollment_cert"` (name = "Connector").
+# Callers no longer need to pass it.
 ################################################################################
 module "zpa_app_connector_group" {
   count                                        = var.byo_provisioning_key == true ? 0 : 1 # Only use this module if a new provisioning key is needed
@@ -77,17 +80,18 @@ module "zpa_app_connector_group" {
   app_connector_group_upgrade_day              = var.app_connector_group_upgrade_day
   app_connector_group_upgrade_time_in_secs     = var.app_connector_group_upgrade_time_in_secs
   app_connector_group_override_version_profile = var.app_connector_group_override_version_profile
-  app_connector_group_version_profile_id       = var.app_connector_group_version_profile_id
   app_connector_group_dns_query_type           = var.app_connector_group_dns_query_type
 }
 
 
 ################################################################################
 # 4. Create ZPA Provisioning Key (or reference existing if byo set)
+#
+# The "Connector" enrollment certificate is now looked up internally by this
+# module. The App Connector group ID is wired from the module above.
 ################################################################################
 module "zpa_provisioning_key" {
   source                            = "../../modules/terraform-zpa-provisioning-key"
-  enrollment_cert                   = var.enrollment_cert
   provisioning_key_name             = "${var.region}-${module.network.vpc_network_name}"
   provisioning_key_enabled          = var.provisioning_key_enabled
   provisioning_key_association_type = var.provisioning_key_association_type
@@ -196,7 +200,7 @@ resource "local_file" "rhel9_user_data_file" {
 data "google_compute_image" "appconnector" {
   count   = var.use_zscaler_image ? 1 : 0
   project = "mpi-zpa-gcp-marketplace"
-  name    = "zpa-connector-el9-2024-08"
+  name    = "zpa-connector-el9-2025-11"
 }
 
 
