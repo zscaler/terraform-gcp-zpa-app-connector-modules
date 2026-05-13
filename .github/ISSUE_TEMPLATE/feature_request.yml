@@ -2,7 +2,7 @@ name: Feature request
 description: Suggest an idea for this project
 # title: '[Enhancement] <Title>'
 labels: enhancement
-assignees: gcp-swfw-modules-codeowners
+assignees: gcp-zpa-app-connector-modules-codeowners
 body:
   - type: textarea
     attributes:
