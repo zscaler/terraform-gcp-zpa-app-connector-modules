@@ -32,8 +32,8 @@ No modules.
 
 | Name | Description | Type | Default | Required |
 | ---- | ----------- | ---- | ------- | :------: |
-| <a name="input_app_connector_group_city_country"></a> [app\_connector\_group\_city\_country](#input\_app\_connector\_group\_city\_country) | Optional: City and country of this App Connector Group. example 'San Jose, US' | `string` | `""` | no |
-| <a name="input_app_connector_group_country_code"></a> [app\_connector\_group\_country\_code](#input\_app\_connector\_group\_country\_code) | Optional: Country code of this App Connector Group. example 'US' | `string` | `""` | no |
+| <a name="input_app_connector_group_city_country"></a> [app\_connector\_group\_city\_country](#input\_app\_connector\_group\_city\_country) | City and country of this App Connector Group. example 'San Jose, US'. The ZPA API auto-derives this field on the server side when omitted, which causes Terraform to detect drift on every subsequent plan. A non-empty value is therefore required for idempotency. | `string` | `"San Jose, US"` | no |
+| <a name="input_app_connector_group_country_code"></a> [app\_connector\_group\_country\_code](#input\_app\_connector\_group\_country\_code) | Country code of this App Connector Group. example 'US'. The ZPA API auto-derives this field on the server side when omitted, which causes Terraform to detect drift on every subsequent plan. A non-empty value is therefore required for idempotency. | `string` | `"US"` | no |
 | <a name="input_app_connector_group_description"></a> [app\_connector\_group\_description](#input\_app\_connector\_group\_description) | Optional: Description of the App Connector Group | `string` | `""` | no |
 | <a name="input_app_connector_group_dns_query_type"></a> [app\_connector\_group\_dns\_query\_type](#input\_app\_connector\_group\_dns\_query\_type) | Whether to enable IPv4 or IPv6, or both, for DNS resolution of all applications in the App Connector Group | `string` | `"IPV4_IPV6"` | no |
 | <a name="input_app_connector_group_enabled"></a> [app\_connector\_group\_enabled](#input\_app\_connector\_group\_enabled) | Whether this App Connector Group is enabled or not | `bool` | `true` | no |
