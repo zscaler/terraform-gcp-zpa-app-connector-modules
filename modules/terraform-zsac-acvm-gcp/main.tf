@@ -25,10 +25,12 @@ resource "google_compute_instance_template" "ac_instance_template" {
     subnetwork = var.acvm_vpc_subnetwork
   }
 
-  metadata = {
+  metadata = merge({
     ssh-keys                = "admin:${var.ssh_key}"
     enable-guest-attributes = "TRUE"
-  }
+    },
+    var.metadata
+  )
 
   metadata_startup_script = var.user_data
 

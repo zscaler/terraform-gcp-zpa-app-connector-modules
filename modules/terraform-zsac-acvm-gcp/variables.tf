@@ -10,6 +10,12 @@ variable "resource_tag" {
   default     = null
 }
 
+variable "metadata" {
+  description = "Other, metadata to set for an instance."
+  default     = {}
+  type        = map(string)
+}
+
 variable "user_data" {
   type        = string
   description = "Cloud Init data"
